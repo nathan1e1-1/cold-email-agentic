@@ -1,0 +1,30 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# build output
+dist/
+build/
+src-tauri/target/
+
+# editor / OS
+.DS_Store
+.vscode/
+.idea/
+
+# env & secrets
+.env
+.env.*
+*.local
+secrets/
+*.key
+*.pem
+
+# local database
+*.sqlite
+*.sqlite-journal
+*.db
+
+# logs
+*.log
+npm-debug.log*
