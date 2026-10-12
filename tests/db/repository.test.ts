@@ -65,6 +65,7 @@ describe('NodeRepository', () => {
     });
     const [m] = await repo.listMessages(thr.rowId);
     expect(m.rfcMessageId).toBe('<m1@x>');
+    expect(m.references).toEqual(['<m0@x>']);
     expect(m.hasListUnsubscribe).toBe(true);
     expect(m.bodyHtml).toBe('<p>hello</p>');
   });
