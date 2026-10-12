@@ -1,7 +1,7 @@
 import type { Repository } from '../db/repository';
 
 // Authoritative defaults from spec §6 "Settings keys".
-export const SETTING_DEFAULTS: Record<string, string> = {
+export const SETTING_DEFAULTS = {
   display_name: '',
   own_email: '',
   signature: '',
@@ -12,23 +12,34 @@ export const SETTING_DEFAULTS: Record<string, string> = {
   rate_limit_per_minute: '3',
   ai_provider: 'gemini',
   ai_key_ref: '',
-};
+} as const satisfies Record<string, string>;
 
 export type SettingKey = keyof typeof SETTING_DEFAULTS;
 
 export class SettingsService {
   private repo: Repository;
+
   constructor(repo: Repository) {
     this.repo = repo;
   }
 
   async get(key: SettingKey): Promise<string> {
     const v = await this.repo.getSetting(key);
-    return v ?? SETTING_DEFAULTS[key];
+    if (v !== null) return v;
+    if (key === 'unsubscribe_mailto') {
+      const own = await this.repo.getSetting('own_email');
+      return own ?? SETTING_DEFAULTS.own_email;
+    }
+    return SETTING_DEFAULTS[key];
   }
 
   async getInt(key: SettingKey): Promise<number> {
-    return Number(await this.get(key));
+    const raw = await this.get(key);
+    const n = Number(raw);
+    if (!Number.isFinite(n)) {
+      throw new Error(`Setting "${key}" is not numeric: ${JSON.stringify(raw)}`);
+    }
+    return n;
   }
 
   async set(key: SettingKey, value: string): Promise<void> {
