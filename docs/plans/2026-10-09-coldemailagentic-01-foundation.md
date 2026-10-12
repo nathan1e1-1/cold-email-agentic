@@ -998,7 +998,7 @@ Expected: creates `src-tauri/` with `Cargo.toml`, `tauri.conf.json`, `src/main.r
 Edit `src-tauri/tauri.conf.json` so the `app.security` section is:
 ```json
 "security": {
-  "csp": "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'",
+  "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'",
   "dangerousDisableAssetCspModification": false
 }
 ```
