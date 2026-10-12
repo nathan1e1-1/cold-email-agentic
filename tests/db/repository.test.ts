@@ -31,12 +31,17 @@ describe('NodeRepository', () => {
 
   it('persists an account and history id', async () => {
     const repo = mk();
-    await repo.upsertAccount({ provider: 'gmail', email: 'me@x.com', ownEmail: 'me@x.com',
+    const a1 = await repo.upsertAccount({ provider: 'gmail', email: 'me@x.com', ownEmail: 'me@x.com',
       tokenRef: 'gmail/token', createdAt: 1 });
     await repo.setHistoryId('h123');
+    const a2 = await repo.upsertAccount({ provider: 'gmail', email: 'me@x.com', ownEmail: 'me@x.com',
+      displayName: 'Me', tokenRef: 'gmail/token2', createdAt: 1 });
+    expect(a2.rowId).toBe(a1.rowId);
     const acc = await repo.getAccount();
     expect(acc?.email).toBe('me@x.com');
     expect(acc?.historyId).toBe('h123');
+    expect(acc?.displayName).toBe('Me');
+    expect(acc?.tokenRef).toBe('gmail/token2');
   });
 
   it('upserts threads idempotently and lists them newest first', async () => {
@@ -49,7 +54,11 @@ describe('NodeRepository', () => {
     const b = await repo.upsertThread({ ...t, subject: 'Hi2', lastMessageAt: 200 });
     expect(a.rowId).toBe(b.rowId);
     expect(b.subject).toBe('Hi2');
-    expect((await repo.listThreads()).length).toBe(1);
+    const newer = await repo.upsertThread({ ...t, id: 'thr2', subject: 'Newer', lastMessageAt: 300 });
+    expect(newer.id).toBe('thr2');
+    const list = await repo.listThreads();
+    expect(list.length).toBe(2);
+    expect(list.map((x) => x.id)).toEqual(['thr2', 'thr1']);
   });
 
   it('stores messages with structured fields', async () => {
@@ -63,7 +72,14 @@ describe('NodeRepository', () => {
       from: { email: 'them@y.com' }, to: [{ email: 'me@x.com' }], cc: [], subject: 'Hi',
       bodyText: 'hello', bodyHtml: '<p>hello</p>', hasListUnsubscribe: true, date: 5, direction: 'inbound',
     });
-    const [m] = await repo.listMessages(thr.rowId);
+    await repo.upsertMessage(thr.rowId, {
+      id: 'm2', rfcMessageId: '<m2@x>', references: [], from: { email: 'me@x.com' },
+      to: [{ email: 'them@y.com' }], cc: [], subject: 'Hi', bodyText: 'second',
+      hasListUnsubscribe: false, date: 5, direction: 'outbound',
+    });
+    const msgs = await repo.listMessages(thr.rowId);
+    expect(msgs.map((x) => x.id)).toEqual(['m1', 'm2']);
+    const m = msgs[0];
     expect(m.rfcMessageId).toBe('<m1@x>');
     expect(m.references).toEqual(['<m0@x>']);
     expect(m.hasListUnsubscribe).toBe(true);
@@ -104,9 +120,11 @@ describe('NodeRepository', () => {
     await repo.recordSend(1000, 'cold', 'x@z.com');
     await repo.recordSend(2000, 'cold', 'y@z.com');
     await repo.recordSend(3000, 'reply', 'x@z.com');
+    await repo.recordSend(3000, 'reply', 'replyonly@z.com');
     expect(await repo.countSendsSince(1500, 'cold')).toBe(1);
+    expect(await repo.countSendsSince(2000, 'cold')).toBe(1);
     expect(await repo.hasColdSendTo('x@z.com')).toBe(true);
-    expect(await repo.hasColdSendTo('reply-only@z.com')).toBe(false);
+    expect(await repo.hasColdSendTo('replyonly@z.com')).toBe(false);
   });
 
   it('stores settings', async () => {
