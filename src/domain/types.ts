@@ -1,7 +1,10 @@
-export type TonePreset =
-  | 'professional' | 'friendly' | 'concise' | 'direct' | 'match';
+export const CARD_STATUSES = ['untouched', 'review', 'sent'] as const;
+export type CardStatus = (typeof CARD_STATUSES)[number];
+
+export const TONE_PRESETS = ['professional', 'friendly', 'concise', 'direct', 'match'] as const;
+export type TonePreset = (typeof TONE_PRESETS)[number];
+
 export type Direction = 'inbound' | 'outbound';
-export type CardStatus = 'untouched' | 'review' | 'sent';
 export type SendKind = 'reply' | 'cold';
 export type PrivacyClass = 'may-use-content' | 'local';
 
@@ -67,8 +70,3 @@ export interface Draft {
   isChosen: boolean;
   createdAt: number;
 }
-
-export const CARD_STATUSES: readonly CardStatus[] =
-  ['untouched', 'review', 'sent'] as const;
-export const TONE_PRESETS: readonly TonePreset[] =
-  ['professional', 'friendly', 'concise', 'direct', 'match'] as const;
