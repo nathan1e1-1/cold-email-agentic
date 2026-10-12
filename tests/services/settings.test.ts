@@ -33,6 +33,12 @@ describe('SettingsService', () => {
     await expect(s.getInt('rate_limit_per_day')).rejects.toThrow(/not numeric/);
   });
 
+  it('throws when a numeric setting is empty', async () => {
+    const s = new SettingsService(new NodeRepository(':memory:'));
+    await s.set('rate_limit_per_day', '');
+    await expect(s.getInt('rate_limit_per_day')).rejects.toThrow(/not numeric/);
+  });
+
   it('overwrites an existing setting', async () => {
     const s = new SettingsService(new NodeRepository(':memory:'));
     await s.set('signature', 'A');

@@ -35,8 +35,9 @@ export class SettingsService {
 
   async getInt(key: SettingKey): Promise<number> {
     const raw = await this.get(key);
-    const n = Number(raw);
-    if (!Number.isFinite(n)) {
+    const trimmed = raw.trim();
+    const n = Number(trimmed);
+    if (trimmed === '' || !Number.isFinite(n)) {
       throw new Error(`Setting "${key}" is not numeric: ${JSON.stringify(raw)}`);
     }
     return n;
