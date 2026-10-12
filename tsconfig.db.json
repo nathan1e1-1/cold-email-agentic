@@ -17,5 +17,5 @@
     "allowImportingTsExtensions": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src/db", "src/domain/types.ts"]
+  "include": ["src/db", "src/domain/types.ts", "tests"]
 }
