@@ -12,7 +12,7 @@ export class NodeRepository implements Repository {
   private db: DatabaseSync;
   constructor(path = ':memory:') {
     this.db = new DatabaseSync(path);
-    migrate(this.db as any);
+    migrate(this.db);
   }
 
   private one<T>(sql: string, ...args: any[]): T | null {
@@ -27,15 +27,20 @@ export class NodeRepository implements Repository {
   }
 
   async upsertAccount(a: Account & { tokenRef: string; createdAt: number }): Promise<RepoAccount> {
+    const existing = this.one<{ id: number }>('SELECT id FROM accounts ORDER BY id ASC LIMIT 1');
+    if (existing) {
+      this.run(
+        'UPDATE accounts SET provider=?,email=?,own_email=?,display_name=?,token_ref=? WHERE id=?',
+        a.provider, a.email, a.ownEmail, a.displayName ?? null, a.tokenRef, existing.id,
+      );
+      return this.mapAccount(this.one<any>('SELECT * FROM accounts WHERE id=?', existing.id)!);
+    }
     this.run(
       `INSERT INTO accounts (provider,email,own_email,display_name,token_ref,history_id,created_at)
-       VALUES (?,?,?,?,?,NULL,?)
-       ON CONFLICT(email) DO UPDATE SET provider=excluded.provider,
-         own_email=excluded.own_email,display_name=excluded.display_name,token_ref=excluded.token_ref`,
+       VALUES (?,?,?,?,?,NULL,?)`,
       a.provider, a.email, a.ownEmail, a.displayName ?? null, a.tokenRef, a.createdAt,
     );
-    const row = this.one<any>('SELECT * FROM accounts ORDER BY id DESC LIMIT 1')!;
-    return this.mapAccount(row);
+    return this.mapAccount(this.one<any>('SELECT * FROM accounts ORDER BY id DESC LIMIT 1')!);
   }
 
   async getAccount(): Promise<RepoAccount | null> {
@@ -44,7 +49,7 @@ export class NodeRepository implements Repository {
   }
 
   async setHistoryId(historyId: string): Promise<void> {
-    this.run('UPDATE accounts SET history_id=?', historyId);
+    this.run('UPDATE accounts SET history_id=? WHERE id=(SELECT id FROM accounts ORDER BY id ASC LIMIT 1)', historyId);
   }
 
   async upsertThread(t: Thread & { accountId: number; hasOwnReply: boolean }): Promise<RepoThread> {
@@ -91,7 +96,7 @@ export class NodeRepository implements Repository {
   }
 
   async listMessages(threadRowId: number): Promise<Message[]> {
-    return this.all<any>('SELECT * FROM messages WHERE thread_id=? ORDER BY date ASC', threadRowId)
+    return this.all<any>('SELECT * FROM messages WHERE thread_id=? ORDER BY date ASC, id ASC', threadRowId)
       .map((r) => this.mapMessage(r));
   }
 
@@ -144,13 +149,12 @@ export class NodeRepository implements Repository {
   }
 
   async listDrafts(cardId: number): Promise<Draft[]> {
-    return this.all<any>('SELECT * FROM drafts WHERE card_id=? ORDER BY created_at DESC', cardId)
+    return this.all<any>('SELECT * FROM drafts WHERE card_id=? ORDER BY created_at DESC, id DESC', cardId)
       .map((r) => this.mapDraft(r));
   }
 
   async chooseDraft(draftId: number, cardId: number): Promise<void> {
-    this.run('UPDATE drafts SET is_chosen=0 WHERE card_id=?', cardId);
-    this.run('UPDATE drafts SET is_chosen=1 WHERE id=?', draftId);
+    this.run('UPDATE drafts SET is_chosen = CASE WHEN id=? THEN 1 ELSE 0 END WHERE card_id=?', draftId, cardId);
   }
 
   async recordSend(sentAt: number, kind: SendKind, toEmail: string): Promise<void> {
