@@ -6,7 +6,7 @@ const SCHEMA = `
 CREATE TABLE IF NOT EXISTS accounts (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   provider TEXT NOT NULL,
-  email TEXT NOT NULL,
+  email TEXT NOT NULL UNIQUE,
   own_email TEXT NOT NULL,
   display_name TEXT,
   token_ref TEXT NOT NULL,
