@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildMime, buildRawMessage } from '../../src/mail/mime';
 import { base64ToUtf8, base64UrlToUtf8 } from '../../src/mail/encoding';
+import { decodeRfc2047 } from '../../src/mail/rfc2047';
 
 const base = { from: 'me@x.com', to: ['them@y.com'], subject: 'Hi', bodyText: 'Hello there' };
 const fixed = { messageId: '<id@x.com>', date: new Date('2026-10-12T10:00:00Z') };
@@ -77,5 +78,14 @@ describe('buildMime', () => {
     const raw = buildMime({ ...base, from: 'Nathan <me@x.com>' });
     const line = raw.split('\r\n').find((l) => l.startsWith('Message-ID:'))!;
     expect(line).toMatch(/^Message-ID: <[^<>]+@x\.com>$/);
+  });
+
+  it('round-trips long multi-byte subjects through RFC 2047 words', () => {
+    const subject = 'Emoji 😀🎉 and CJK 日本語'.repeat(5);
+    const raw = buildMime({ ...base, subject }, fixed);
+    const words = raw.match(/=\?UTF-8\?B\?[^?]+\?=/g) ?? [];
+    expect(words.length).toBeGreaterThan(1);
+    for (const w of words) expect(w.length).toBeLessThanOrEqual(75);
+    expect(words.map((w) => decodeRfc2047(w)).join('')).toBe(subject);
   });
 });

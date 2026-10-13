@@ -36,7 +36,12 @@ export function headerValue(headers: GmailHeader[] | undefined, name: string): s
 }
 
 function decode(data: string | undefined): string {
-  return data ? base64UrlToUtf8(data) : '';
+  if (!data) return '';
+  try {
+    return base64UrlToUtf8(data);
+  } catch {
+    return '';
+  }
 }
 
 function stripHtml(html: string): string {

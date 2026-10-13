@@ -114,6 +114,12 @@ describe('gmailParse', () => {
     expect(parseMessage(res, 'me@x.com').bodyText).toBe('the body');
   });
 
+  it('does not throw on malformed body data', () => {
+    const res = messageResource();
+    res.payload!.parts = [{ mimeType: 'text/plain', body: { data: 'abcde' } }];
+    expect(parseMessage(res, 'me@x.com').bodyText).toBe('');
+  });
+
   it('unions labels across messages and uses the max date', () => {
     const older = messageResource();
     older.id = 'm0';

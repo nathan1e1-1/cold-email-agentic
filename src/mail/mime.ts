@@ -26,12 +26,22 @@ function assertHeaderSafe(value: string): string {
 function encodeHeaderValue(value: string): string {
   assertHeaderSafe(value);
   if (/^[\x20-\x7E]*$/.test(value)) return value;
-  const b64 = utf8ToBase64(value);
-  const chunks: string[] = [];
-  for (let i = 0; i < b64.length; i += 44) {
-    chunks.push(`=?UTF-8?B?${b64.slice(i, i + 44)}?=`);
+  const encoder = new TextEncoder();
+  const words: string[] = [];
+  let buffer = '';
+  let bytes = 0;
+  for (const ch of value) {
+    const size = encoder.encode(ch).length;
+    if (bytes + size > 33) {
+      words.push(buffer);
+      buffer = '';
+      bytes = 0;
+    }
+    buffer += ch;
+    bytes += size;
   }
-  return chunks.join(`${CRLF} `);
+  if (buffer) words.push(buffer);
+  return words.map((w) => `=?UTF-8?B?${utf8ToBase64(w)}?=`).join(`${CRLF} `);
 }
 
 function rfc2822Date(d: Date): string {
