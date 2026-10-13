@@ -8,6 +8,7 @@ export interface DraftInput {
   bodyText: string;
   inReplyTo?: string;
   references?: string[];
+  listUnsubscribeMailto?: string;
 }
 
 export interface HistoryDelta {

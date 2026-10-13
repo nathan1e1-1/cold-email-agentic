@@ -32,6 +32,11 @@ export interface OAuthConfig {
   scopes?: string[];
 }
 
+export interface RefreshConfig {
+  clientId: string;
+  clientSecret?: string;
+}
+
 export interface TokenSet {
   accessToken: string;
   refreshToken: string | null;
@@ -105,7 +110,7 @@ function parseTokenResponse(body: string, now: number, priorRefresh: string | nu
 }
 
 export async function exchangeCode(
-  params: { code: string; verifier: string; redirectUri: string } & OAuthConfig,
+  params: { code: string; verifier: string } & OAuthConfig,
   http: HttpClient,
   now = Date.now(),
 ): Promise<TokenSet> {
@@ -127,7 +132,7 @@ export async function exchangeCode(
 }
 
 export async function refreshAccessToken(
-  params: { refreshToken: string } & OAuthConfig,
+  params: { refreshToken: string } & RefreshConfig,
   http: HttpClient,
   now = Date.now(),
 ): Promise<TokenSet> {
@@ -179,7 +184,7 @@ export class OAuthAuthenticator implements Authenticator {
     });
     const { code } = await this.runConsent(url);
     const tokens = await exchangeCode(
-      { code, verifier, redirectUri: this.config.redirectUri, ...this.config },
+      { ...this.config, code, verifier },
       this.http,
       this.clock(),
     );
@@ -200,7 +205,7 @@ export class OAuthAuthenticator implements Authenticator {
     const refresh = await this.secrets.get(REFRESH_KEY);
     if (!refresh) throw new Error('Not authenticated');
     const tokens = await refreshAccessToken(
-      { refreshToken: refresh, ...this.config },
+      { refreshToken: refresh, clientId: this.config.clientId, clientSecret: this.config.clientSecret },
       this.http,
       this.clock(),
     );
