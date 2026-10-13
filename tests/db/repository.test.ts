@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { DatabaseSync } from 'node:sqlite';
-import { migrate } from '../../src/db/schema';
+import { migrate, MIGRATIONS } from '../../src/db/schema';
 import { NodeRepository } from '../../src/db/nodeRepository';
 
 describe('migrate', () => {
@@ -19,21 +19,33 @@ describe('migrate', () => {
     }
   });
 
-  it('is idempotent', () => {
+  it('is idempotent and records the schema version', () => {
     const db = new DatabaseSync(':memory:');
     migrate(db as any);
     expect(() => migrate(db as any)).not.toThrow();
+    const row = db.prepare('PRAGMA user_version').get() as { user_version: number };
+    expect(row.user_version).toBe(MIGRATIONS.length);
   });
 });
 
 describe('NodeRepository', () => {
   const mk = () => new NodeRepository(':memory:');
 
-  it('persists an account and history id', async () => {
+  async function seedAccount(repo: NodeRepository) {
+    return repo.upsertAccount({ provider: 'gmail', email: 'me@x.com', ownEmail: 'me@x.com',
+      tokenRef: 't', createdAt: 1 });
+  }
+
+  async function seedThread(repo: NodeRepository, accountId: number, id: string, lastMessageAt = 1) {
+    return repo.upsertThread({ id, accountId, subject: '', participants: [], labels: [],
+      messages: [], lastMessageAt, snippet: '', inInbox: true });
+  }
+
+  it('persists an account, updates it in place, and scopes history id', async () => {
     const repo = mk();
     const a1 = await repo.upsertAccount({ provider: 'gmail', email: 'me@x.com', ownEmail: 'me@x.com',
       tokenRef: 'gmail/token', createdAt: 1 });
-    await repo.setHistoryId('h123');
+    await repo.setHistoryId(a1.rowId, 'h123');
     const a2 = await repo.upsertAccount({ provider: 'gmail', email: 'me@x.com', ownEmail: 'me@x.com',
       displayName: 'Me', tokenRef: 'gmail/token2', createdAt: 1 });
     expect(a2.rowId).toBe(a1.rowId);
@@ -46,16 +58,14 @@ describe('NodeRepository', () => {
 
   it('upserts threads idempotently and lists them newest first', async () => {
     const repo = mk();
-    const acc = await repo.upsertAccount({ provider: 'gmail', email: 'me@x.com',
-      ownEmail: 'me@x.com', tokenRef: 't', createdAt: 1 });
+    const acc = await seedAccount(repo);
     const t = { id: 'thr1', accountId: acc.rowId, subject: 'Hi', participants: [], labels: [],
-      messages: [], lastMessageAt: 100, snippet: 's', inInbox: true, hasOwnReply: false };
+      messages: [], lastMessageAt: 100, snippet: 's', inInbox: true };
     const a = await repo.upsertThread(t);
     const b = await repo.upsertThread({ ...t, subject: 'Hi2', lastMessageAt: 200 });
     expect(a.rowId).toBe(b.rowId);
     expect(b.subject).toBe('Hi2');
-    const newer = await repo.upsertThread({ ...t, id: 'thr2', subject: 'Newer', lastMessageAt: 300 });
-    expect(newer.id).toBe('thr2');
+    await seedThread(repo, acc.rowId, 'thr2', 300);
     const list = await repo.listThreads();
     expect(list.length).toBe(2);
     expect(list.map((x) => x.id)).toEqual(['thr2', 'thr1']);
@@ -63,10 +73,8 @@ describe('NodeRepository', () => {
 
   it('stores messages with structured fields', async () => {
     const repo = mk();
-    const acc = await repo.upsertAccount({ provider: 'gmail', email: 'me@x.com',
-      ownEmail: 'me@x.com', tokenRef: 't', createdAt: 1 });
-    const thr = await repo.upsertThread({ id: 'thr1', accountId: acc.rowId, subject: 'Hi',
-      participants: [], labels: [], messages: [], lastMessageAt: 1, snippet: '', inInbox: true, hasOwnReply: false });
+    const acc = await seedAccount(repo);
+    const thr = await seedThread(repo, acc.rowId, 'thr1');
     await repo.upsertMessage(thr.rowId, {
       id: 'm1', rfcMessageId: '<m1@x>', references: ['<m0@x>'],
       from: { email: 'them@y.com' }, to: [{ email: 'me@x.com' }], cc: [], subject: 'Hi',
@@ -88,11 +96,9 @@ describe('NodeRepository', () => {
 
   it('creates and moves cards, and chooses a draft', async () => {
     const repo = mk();
-    const acc = await repo.upsertAccount({ provider: 'gmail', email: 'me@x.com',
-      ownEmail: 'me@x.com', tokenRef: 't', createdAt: 1 });
-    const thr = await repo.upsertThread({ id: 'thr1', accountId: acc.rowId, subject: '', participants: [],
-      labels: [], messages: [], lastMessageAt: 1, snippet: '', inInbox: true, hasOwnReply: false });
-    const card = await repo.createCard(thr.rowId, 'untouched', 0, 10);
+    const acc = await seedAccount(repo);
+    const thr = await seedThread(repo, acc.rowId, 'thr1');
+    const card = await repo.createCard(thr.rowId, 'untouched', 10);
     await repo.moveCard(card.id, 'sent', 0, 20);
     expect((await repo.getCardByThread(thr.rowId))?.status).toBe('sent');
     const d1 = await repo.createDraft({ cardId: card.id, contactId: null, body: 'a', model: 'gemini',
@@ -105,14 +111,65 @@ describe('NodeRepository', () => {
     expect(drafts.find((d) => d.id === d1.id)?.isChosen).toBe(false);
   });
 
-  it('dedupes contacts and toggles do_not_contact', async () => {
+  it('inserts new cards at the top of a column with unique positions', async () => {
+    const repo = mk();
+    const acc = await seedAccount(repo);
+    const thrA = await seedThread(repo, acc.rowId, 'thrA');
+    const thrB = await seedThread(repo, acc.rowId, 'thrB');
+    const cardA = await repo.createCard(thrA.rowId, 'untouched', 1);
+    const cardB = await repo.createCard(thrB.rowId, 'untouched', 2);
+    const untouched = (await repo.listCards()).filter((c) => c.status === 'untouched');
+    expect(untouched.map((c) => c.id)).toEqual([cardB.id, cardA.id]);
+    expect(untouched.map((c) => c.position)).toEqual([0, 1]);
+  });
+
+  it('moves a card within a column, shifting siblings', async () => {
+    const repo = mk();
+    const acc = await seedAccount(repo);
+    const thrA = await seedThread(repo, acc.rowId, 'thrA');
+    const thrB = await seedThread(repo, acc.rowId, 'thrB');
+    const thrC = await seedThread(repo, acc.rowId, 'thrC');
+    const cardA = await repo.createCard(thrA.rowId, 'untouched', 1);
+    const cardB = await repo.createCard(thrB.rowId, 'untouched', 2);
+    const cardC = await repo.createCard(thrC.rowId, 'untouched', 3);
+    await repo.moveCard(cardA.id, 'untouched', 0, 4);
+    const untouched = (await repo.listCards()).filter((c) => c.status === 'untouched');
+    expect(untouched.map((c) => c.id)).toEqual([cardA.id, cardC.id, cardB.id]);
+    expect(untouched.map((c) => c.position)).toEqual([0, 1, 2]);
+  });
+
+  it('moves a card between columns, closing the source gap', async () => {
+    const repo = mk();
+    const acc = await seedAccount(repo);
+    const thrA = await seedThread(repo, acc.rowId, 'thrA');
+    const thrB = await seedThread(repo, acc.rowId, 'thrB');
+    const cardA = await repo.createCard(thrA.rowId, 'untouched', 1);
+    const cardB = await repo.createCard(thrB.rowId, 'untouched', 2);
+    await repo.moveCard(cardA.id, 'review', 0, 3);
+    const untouched = (await repo.listCards()).filter((c) => c.status === 'untouched');
+    const review = (await repo.listCards()).filter((c) => c.status === 'review');
+    expect(untouched.map((c) => c.id)).toEqual([cardB.id]);
+    expect(untouched.map((c) => c.position)).toEqual([0]);
+    expect(review.map((c) => c.id)).toEqual([cardA.id]);
+    expect(review.map((c) => c.position)).toEqual([0]);
+  });
+
+  it('does not clear do_not_contact when a contact is re-upserted', async () => {
     const repo = mk();
     await repo.upsertContact({ name: 'A', email: 'a@z.com', notes: '', doNotContact: false });
-    await repo.upsertContact({ name: 'A2', email: 'a@z.com', notes: 'n', doNotContact: false });
-    const c = await repo.getContactByEmail('a@z.com');
-    expect(c?.name).toBe('A2');
     await repo.setDoNotContact('a@z.com', true);
-    expect((await repo.getContactByEmail('a@z.com'))?.doNotContact).toBe(true);
+    await repo.upsertContact({ name: 'A again', email: 'a@z.com', notes: 'n', doNotContact: false });
+    const c = await repo.getContactByEmail('a@z.com');
+    expect(c?.name).toBe('A again');
+    expect(c?.doNotContact).toBe(true);
+  });
+
+  it('normalizes contact emails (case + whitespace)', async () => {
+    const repo = mk();
+    await repo.upsertContact({ name: 'A', email: '  A@Z.com ', notes: '', doNotContact: false });
+    const c = await repo.getContactByEmail('a@z.com');
+    expect(c?.email).toBe('a@z.com');
+    expect((await repo.getContactByEmail('A@Z.COM'))?.id).toBe(c?.id);
   });
 
   it('records sends and answers rate/duplicate queries', async () => {
