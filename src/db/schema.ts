@@ -1,8 +1,9 @@
 export interface Sqlite {
   exec(sql: string): void;
+  prepare(sql: string): { get(...args: unknown[]): unknown };
 }
 
-const SCHEMA = `
+const MIGRATION_1 = `
 CREATE TABLE IF NOT EXISTS accounts (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   provider TEXT NOT NULL,
@@ -22,7 +23,6 @@ CREATE TABLE IF NOT EXISTS threads (
   labels_json TEXT NOT NULL DEFAULT '[]',
   last_message_at INTEGER NOT NULL DEFAULT 0,
   snippet TEXT NOT NULL DEFAULT '',
-  has_own_reply INTEGER NOT NULL DEFAULT 0,
   in_inbox INTEGER NOT NULL DEFAULT 1
 );
 CREATE TABLE IF NOT EXISTS messages (
@@ -79,11 +79,19 @@ CREATE TABLE IF NOT EXISTS settings (
 );
 CREATE INDEX IF NOT EXISTS idx_messages_thread ON messages(thread_id);
 CREATE INDEX IF NOT EXISTS idx_cards_status ON cards(status, position);
-CREATE INDEX IF NOT EXISTS idx_sends_time_kind ON sends(sent_at, kind);
+CREATE INDEX IF NOT EXISTS idx_sends_kind_time ON sends(kind, sent_at);
 CREATE INDEX IF NOT EXISTS idx_sends_to ON sends(to_email);
 `;
 
+// Ordered, append-only. Each entry is applied once and bumps PRAGMA user_version.
+export const MIGRATIONS: readonly string[] = [MIGRATION_1];
+
 export function migrate(db: Sqlite): void {
   db.exec('PRAGMA foreign_keys = ON;');
-  db.exec(SCHEMA);
+  const row = db.prepare('PRAGMA user_version').get() as { user_version?: number } | undefined;
+  const current = Number(row?.user_version ?? 0);
+  for (let version = current; version < MIGRATIONS.length; version++) {
+    db.exec(MIGRATIONS[version]);
+    db.exec(`PRAGMA user_version = ${version + 1}`);
+  }
 }

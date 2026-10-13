@@ -7,6 +7,7 @@ const bool = (n: number | null | undefined) => n === 1;
 const toBool = (b: boolean) => (b ? 1 : 0);
 const j = (v: unknown) => JSON.stringify(v ?? null);
 const pj = <T,>(s: string | null, fallback: T): T => (s ? (JSON.parse(s) as T) : fallback);
+const normEmail = (email: string) => email.trim().toLowerCase();
 
 export class NodeRepository implements Repository {
   private db: DatabaseSync;
@@ -23,7 +24,19 @@ export class NodeRepository implements Repository {
     return this.db.prepare(sql).all(...args) as T[];
   }
   private run(sql: string, ...args: any[]) {
-    this.db.prepare(sql).run(...args);
+    return this.db.prepare(sql).run(...args);
+  }
+
+  async transaction<T>(fn: () => Promise<T>): Promise<T> {
+    this.db.exec('BEGIN');
+    try {
+      const result = await fn();
+      this.db.exec('COMMIT');
+      return result;
+    } catch (err) {
+      this.db.exec('ROLLBACK');
+      throw err;
+    }
   }
 
   async upsertAccount(a: Account & { tokenRef: string; createdAt: number }): Promise<RepoAccount> {
@@ -35,12 +48,12 @@ export class NodeRepository implements Repository {
       );
       return this.mapAccount(this.one<any>('SELECT * FROM accounts WHERE id=?', existing.id)!);
     }
-    this.run(
+    const info = this.run(
       `INSERT INTO accounts (provider,email,own_email,display_name,token_ref,history_id,created_at)
        VALUES (?,?,?,?,?,NULL,?)`,
       a.provider, a.email, a.ownEmail, a.displayName ?? null, a.tokenRef, a.createdAt,
     );
-    return this.mapAccount(this.one<any>('SELECT * FROM accounts ORDER BY id DESC LIMIT 1')!);
+    return this.mapAccount(this.one<any>('SELECT * FROM accounts WHERE id=?', Number(info.lastInsertRowid))!);
   }
 
   async getAccount(): Promise<RepoAccount | null> {
@@ -48,21 +61,21 @@ export class NodeRepository implements Repository {
     return row ? this.mapAccount(row) : null;
   }
 
-  async setHistoryId(historyId: string): Promise<void> {
-    this.run('UPDATE accounts SET history_id=? WHERE id=(SELECT id FROM accounts ORDER BY id ASC LIMIT 1)', historyId);
+  async setHistoryId(accountId: number, historyId: string): Promise<void> {
+    this.run('UPDATE accounts SET history_id=? WHERE id=?', historyId, accountId);
   }
 
-  async upsertThread(t: Thread & { accountId: number; hasOwnReply: boolean }): Promise<RepoThread> {
+  async upsertThread(t: Thread & { accountId: number }): Promise<RepoThread> {
     this.run(
       `INSERT INTO threads (account_id,provider_thread_id,subject,participants_json,labels_json,
-         last_message_at,snippet,has_own_reply,in_inbox)
-       VALUES (?,?,?,?,?,?,?,?,?)
+         last_message_at,snippet,in_inbox)
+       VALUES (?,?,?,?,?,?,?,?)
        ON CONFLICT(provider_thread_id) DO UPDATE SET subject=excluded.subject,
          participants_json=excluded.participants_json,labels_json=excluded.labels_json,
          last_message_at=excluded.last_message_at,snippet=excluded.snippet,
-         has_own_reply=excluded.has_own_reply,in_inbox=excluded.in_inbox`,
+         in_inbox=excluded.in_inbox`,
       t.accountId, t.id, t.subject, j(t.participants), j(t.labels), t.lastMessageAt,
-      t.snippet, toBool(t.hasOwnReply), toBool(t.inInbox),
+      t.snippet, toBool(t.inInbox),
     );
     return (await this.getThreadByProviderId(t.id))!;
   }
@@ -77,7 +90,9 @@ export class NodeRepository implements Repository {
   }
 
   async deleteMessages(providerMessageIds: string[]): Promise<void> {
-    for (const id of providerMessageIds) this.run('DELETE FROM messages WHERE provider_message_id=?', id);
+    await this.transaction(async () => {
+      for (const id of providerMessageIds) this.run('DELETE FROM messages WHERE provider_message_id=?', id);
+    });
   }
 
   async upsertMessage(threadRowId: number, m: Message): Promise<void> {
@@ -100,10 +115,17 @@ export class NodeRepository implements Repository {
       .map((r) => this.mapMessage(r));
   }
 
-  async createCard(threadRowId: number, status: CardStatus, position: number, now: number): Promise<Card> {
-    this.run('INSERT INTO cards (thread_id,status,position,updated_at) VALUES (?,?,?,?)',
-      threadRowId, status, position, now);
-    return (await this.getCardByThread(threadRowId))!;
+  async createCard(threadRowId: number, status: CardStatus, now: number): Promise<Card> {
+    return this.transaction(async () => {
+      const existing = await this.getCardByThread(threadRowId);
+      if (existing) return existing;
+      this.run('UPDATE cards SET position = position + 1 WHERE status = ?', status);
+      const info = this.run(
+        'INSERT INTO cards (thread_id,status,position,updated_at) VALUES (?,?,0,?)',
+        threadRowId, status, now,
+      );
+      return this.mapCard(this.one<any>('SELECT * FROM cards WHERE id=?', Number(info.lastInsertRowid))!);
+    });
   }
 
   async getCardByThread(threadRowId: number): Promise<Card | null> {
@@ -112,40 +134,70 @@ export class NodeRepository implements Repository {
   }
 
   async listCards(): Promise<Card[]> {
-    return this.all<any>('SELECT * FROM cards').map((r) => this.mapCard(r));
+    return this.all<any>('SELECT * FROM cards ORDER BY status, position, id').map((r) => this.mapCard(r));
   }
 
-  async moveCard(cardId: number, status: CardStatus, position: number, now: number): Promise<void> {
-    this.run('UPDATE cards SET status=?,position=?,updated_at=? WHERE id=?', status, position, now, cardId);
+  async moveCard(cardId: number, status: CardStatus, index: number, now: number): Promise<void> {
+    await this.transaction(async () => {
+      const card = this.one<{ status: CardStatus; position: number }>(
+        'SELECT status, position FROM cards WHERE id=?', cardId,
+      );
+      if (!card) throw new Error(`Card not found: ${cardId}`);
+      const from = card.status;
+      const fromPos = card.position;
+      const to = Math.max(0, index);
+
+      if (from === status) {
+        if (to === fromPos) {
+          this.run('UPDATE cards SET updated_at=? WHERE id=?', now, cardId);
+          return;
+        }
+        if (to < fromPos) {
+          this.run(
+            'UPDATE cards SET position = position + 1 WHERE status=? AND position >= ? AND position < ?',
+            status, to, fromPos,
+          );
+        } else {
+          this.run(
+            'UPDATE cards SET position = position - 1 WHERE status=? AND position > ? AND position <= ?',
+            status, fromPos, to,
+          );
+        }
+        this.run('UPDATE cards SET position=?, updated_at=? WHERE id=?', to, now, cardId);
+      } else {
+        this.run('UPDATE cards SET position = position - 1 WHERE status=? AND position > ?', from, fromPos);
+        this.run('UPDATE cards SET position = position + 1 WHERE status=? AND position >= ?', status, to);
+        this.run('UPDATE cards SET status=?, position=?, updated_at=? WHERE id=?', status, to, now, cardId);
+      }
+    });
   }
 
   async upsertContact(c: Omit<Contact, 'id'>): Promise<Contact> {
+    const email = normEmail(c.email);
     this.run(
       `INSERT INTO contacts (name,email,notes,do_not_contact,created_at) VALUES (?,?,?,?,?)
-       ON CONFLICT(email) DO UPDATE SET name=excluded.name,notes=excluded.notes,
-         do_not_contact=excluded.do_not_contact`,
-      c.name, c.email, c.notes ?? '', toBool(c.doNotContact), Date.now(),
+       ON CONFLICT(email) DO UPDATE SET name=excluded.name, notes=excluded.notes`,
+      c.name, email, c.notes ?? '', toBool(c.doNotContact), Date.now(),
     );
-    return (await this.getContactByEmail(c.email))!;
+    return (await this.getContactByEmail(email))!;
   }
 
   async getContactByEmail(email: string): Promise<Contact | null> {
-    const row = this.one<any>('SELECT * FROM contacts WHERE email=?', email);
+    const row = this.one<any>('SELECT * FROM contacts WHERE email=?', normEmail(email));
     return row ? this.mapContact(row) : null;
   }
 
   async setDoNotContact(email: string, value: boolean): Promise<void> {
-    this.run('UPDATE contacts SET do_not_contact=? WHERE email=?', toBool(value), email);
+    this.run('UPDATE contacts SET do_not_contact=? WHERE email=?', toBool(value), normEmail(email));
   }
 
   async createDraft(d: Omit<Draft, 'id' | 'isChosen'>): Promise<Draft> {
-    this.run(
+    const info = this.run(
       `INSERT INTO drafts (card_id,contact_id,body,model,tone,instruction,is_chosen,created_at)
        VALUES (?,?,?,?,?,?,0,?)`,
       d.cardId, d.contactId, d.body, d.model, d.tone, d.instruction, d.createdAt,
     );
-    const row = this.one<any>('SELECT * FROM drafts ORDER BY id DESC LIMIT 1')!;
-    return this.mapDraft(row);
+    return this.mapDraft(this.one<any>('SELECT * FROM drafts WHERE id=?', Number(info.lastInsertRowid))!);
   }
 
   async listDrafts(cardId: number): Promise<Draft[]> {
@@ -158,7 +210,7 @@ export class NodeRepository implements Repository {
   }
 
   async recordSend(sentAt: number, kind: SendKind, toEmail: string): Promise<void> {
-    this.run('INSERT INTO sends (sent_at,kind,to_email) VALUES (?,?,?)', sentAt, kind, toEmail);
+    this.run('INSERT INTO sends (sent_at,kind,to_email) VALUES (?,?,?)', sentAt, kind, normEmail(toEmail));
   }
 
   async countSendsSince(sinceTs: number, kind: SendKind): Promise<number> {
@@ -169,7 +221,7 @@ export class NodeRepository implements Repository {
 
   async hasColdSendTo(email: string): Promise<boolean> {
     const row = this.one<{ n: number }>(
-      "SELECT COUNT(*) AS n FROM sends WHERE kind='cold' AND to_email=?", email)!;
+      "SELECT COUNT(*) AS n FROM sends WHERE kind='cold' AND to_email=?", normEmail(email))!;
     return Number(row.n) > 0;
   }
 
@@ -193,8 +245,7 @@ export class NodeRepository implements Repository {
   private mapThread(r: any): RepoThread {
     return { rowId: r.id, accountId: r.account_id, id: r.provider_thread_id, subject: r.subject,
       participants: pj<Address[]>(r.participants_json, []), labels: pj<string[]>(r.labels_json, []),
-      messages: [], lastMessageAt: r.last_message_at, snippet: r.snippet,
-      inInbox: bool(r.in_inbox), hasOwnReply: bool(r.has_own_reply) };
+      messages: [], lastMessageAt: r.last_message_at, snippet: r.snippet, inInbox: bool(r.in_inbox) };
   }
   private mapMessage(r: any): Message {
     return { id: r.provider_message_id, rfcMessageId: r.rfc_message_id,

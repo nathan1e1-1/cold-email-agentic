@@ -10,25 +10,29 @@ export interface RepoAccount extends Account {
 export interface RepoThread extends Thread {
   rowId: number;
   accountId: number;
-  hasOwnReply: boolean;
 }
 
 export interface Repository {
+  transaction<T>(fn: () => Promise<T>): Promise<T>;
+
   upsertAccount(a: Account & { tokenRef: string; createdAt: number }): Promise<RepoAccount>;
   getAccount(): Promise<RepoAccount | null>;
-  setHistoryId(historyId: string): Promise<void>;
+  setHistoryId(accountId: number, historyId: string): Promise<void>;
 
-  upsertThread(t: Thread & { accountId: number; hasOwnReply: boolean }): Promise<RepoThread>;
+  upsertThread(t: Thread & { accountId: number }): Promise<RepoThread>;
   getThreadByProviderId(providerThreadId: string): Promise<RepoThread | null>;
   listThreads(): Promise<RepoThread[]>;
   deleteMessages(providerMessageIds: string[]): Promise<void>;
   upsertMessage(threadRowId: number, m: Message): Promise<void>;
   listMessages(threadRowId: number): Promise<Message[]>;
 
-  createCard(threadRowId: number, status: CardStatus, position: number, now: number): Promise<Card>;
+  /** Inserts a card at the top (position 0) of the given column, shifting siblings. */
+  createCard(threadRowId: number, status: CardStatus, now: number): Promise<Card>;
   getCardByThread(threadRowId: number): Promise<Card | null>;
+  /** Cards ordered by (status, position). */
   listCards(): Promise<Card[]>;
-  moveCard(cardId: number, status: CardStatus, position: number, now: number): Promise<void>;
+  /** Moves a card to `index` within `status`, shifting siblings and closing the source gap. */
+  moveCard(cardId: number, status: CardStatus, index: number, now: number): Promise<void>;
 
   upsertContact(c: Omit<Contact, 'id'>): Promise<Contact>;
   getContactByEmail(email: string): Promise<Contact | null>;
