@@ -25,7 +25,7 @@ function assertHeaderSafe(value: string): string {
 
 function encodeHeaderValue(value: string): string {
   assertHeaderSafe(value);
-  if (/^[\x20-\x7E]*$/.test(value)) return value;
+  if (/^[\x20-\x7E]*$/.test(value) && !value.includes('=?')) return value;
   const encoder = new TextEncoder();
   const words: string[] = [];
   let buffer = '';

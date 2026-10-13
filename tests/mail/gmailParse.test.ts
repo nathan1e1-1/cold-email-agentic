@@ -120,6 +120,23 @@ describe('gmailParse', () => {
     expect(parseMessage(res, 'me@x.com').bodyText).toBe('');
   });
 
+  it('does not treat an inline binary part as the body text', () => {
+    const res: GmailMessageResource = {
+      id: 'm1',
+      threadId: 't1',
+      payload: {
+        mimeType: 'multipart/related',
+        parts: [
+          { mimeType: 'text/html', body: { data: utf8ToBase64Url('<p>Hello</p>') } },
+          { mimeType: 'image/png', body: { data: utf8ToBase64Url('\u0089PNG\u0000binarybytes') } },
+        ],
+      },
+    };
+    const m = parseMessage(res, 'me@x.com');
+    expect(m.bodyText).toBe('Hello');
+    expect(m.bodyHtml).toBe('<p>Hello</p>');
+  });
+
   it('unions labels across messages and uses the max date', () => {
     const older = messageResource();
     older.id = 'm0';

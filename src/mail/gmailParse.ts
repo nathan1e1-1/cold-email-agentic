@@ -53,14 +53,16 @@ export function collectBody(payload: GmailPayload | undefined): { text: string; 
   let html = '';
   const walk = (p: GmailPayload | undefined): void => {
     if (!p || p.filename) return;
-    if (p.mimeType === 'text/plain' && p.body?.data) {
-      if (!text) text = decode(p.body.data);
-    } else if (p.mimeType === 'text/html' && p.body?.data) {
-      if (!html) html = decode(p.body.data);
-    } else if (p.parts) {
+    if (p.parts) {
       for (const part of p.parts) walk(part);
-    } else if (p.body?.data && !text) {
-      text = decode(p.body.data);
+      return;
+    }
+    if (!p.body?.data) return;
+    const mime = p.mimeType ?? '';
+    if (mime === 'text/html') {
+      if (!html) html = decode(p.body.data);
+    } else if (mime === 'text/plain' || mime === '') {
+      if (!text) text = decode(p.body.data);
     }
   };
   walk(payload);

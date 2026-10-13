@@ -88,4 +88,12 @@ describe('buildMime', () => {
     for (const w of words) expect(w.length).toBeLessThanOrEqual(75);
     expect(words.map((w) => decodeRfc2047(w)).join('')).toBe(subject);
   });
+
+  it('encodes an ASCII subject that literally contains an encoded-word', () => {
+    const subject = '=?UTF-8?B?QQ==?=';
+    const raw = buildMime({ ...base, subject }, fixed);
+    const words = raw.match(/=\?UTF-8\?B\?[^?]+\?=/g) ?? [];
+    expect(words.length).toBeGreaterThan(0);
+    expect(words.map((w) => decodeRfc2047(w)).join('')).toBe(subject);
+  });
 });
