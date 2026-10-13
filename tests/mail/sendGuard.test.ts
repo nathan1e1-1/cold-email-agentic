@@ -68,4 +68,40 @@ describe('sendGuard', () => {
     expect(await duplicateWarning(repo, 'X@Z.com')).toBe(true);
     expect(await duplicateWarning(repo, 'new@z.com')).toBe(false);
   });
+
+  it('allows a cold send exactly one under the limit', async () => {
+    const { repo, settings } = ctx();
+    await settings.set('mailing_address', '1 Main St');
+    await settings.set('rate_limit_per_day', '2');
+    const now = 10 * 24 * 60 * 60 * 1000;
+    await repo.recordSend(now - 1000, 'cold', 'x@z.com');
+    expect(await sendGuard(repo, settings, { kind: 'cold', toEmail: 'z@z.com', now })).toEqual({ ok: true });
+  });
+
+  it('does not rate-limit replies even when the cold window is full', async () => {
+    const { repo, settings } = ctx();
+    await settings.set('mailing_address', '1 Main St');
+    await settings.set('rate_limit_per_day', '1');
+    await settings.set('rate_limit_per_minute', '1');
+    const now = 10 * 24 * 60 * 60 * 1000;
+    await repo.recordSend(now - 1000, 'cold', 'x@z.com');
+    expect(await sendGuard(repo, settings, { kind: 'reply', toEmail: 'z@z.com', now })).toEqual({ ok: true });
+  });
+
+  it('counts sends at the inclusive window edge', async () => {
+    const { repo, settings } = ctx();
+    await settings.set('mailing_address', '1 Main St');
+    await settings.set('rate_limit_per_day', '1');
+    const now = 10 * 24 * 60 * 60 * 1000;
+    await repo.recordSend(now - 24 * 60 * 60 * 1000, 'cold', 'x@z.com');
+    expect(await sendGuard(repo, settings, { kind: 'cold', toEmail: 'z@z.com', now }))
+      .toEqual({ ok: false, reason: 'rate_limit_day' });
+  });
+
+  it('falls back to defaults when a rate setting is not numeric', async () => {
+    const { repo, settings } = ctx();
+    await settings.set('mailing_address', '1 Main St');
+    await settings.set('rate_limit_per_day', 'garbage');
+    expect(await sendGuard(repo, settings, { kind: 'cold', toEmail: 'z@z.com', now: 1000 })).toEqual({ ok: true });
+  });
 });

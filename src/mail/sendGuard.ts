@@ -1,6 +1,6 @@
 import type { Repository } from '../db/repository';
 import type { SendKind } from '../domain/types';
-import type { SettingsService } from '../services/settings';
+import { SETTING_DEFAULTS, type SettingKey, type SettingsService } from '../services/settings';
 
 export type GuardReason =
   | 'missing_mailing_address'
@@ -13,17 +13,27 @@ export type GuardResult = { ok: true } | { ok: false; reason: GuardReason };
 export interface GuardInput {
   kind: SendKind;
   toEmail: string;
-  now: number;
+  now?: number;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MINUTE_MS = 60 * 1000;
+
+async function readLimit(settings: SettingsService, key: SettingKey): Promise<number> {
+  try {
+    return await settings.getInt(key);
+  } catch {
+    return Number(SETTING_DEFAULTS[key]);
+  }
+}
 
 export async function sendGuard(
   repo: Repository,
   settings: SettingsService,
   input: GuardInput,
 ): Promise<GuardResult> {
+  const now = input.now ?? Date.now();
+
   if (input.kind === 'cold') {
     const mailingAddress = (await settings.get('mailing_address')).trim();
     if (mailingAddress === '') return { ok: false, reason: 'missing_mailing_address' };
@@ -33,12 +43,12 @@ export async function sendGuard(
   if (contact?.doNotContact) return { ok: false, reason: 'do_not_contact' };
 
   if (input.kind === 'cold') {
-    const perDay = await settings.getInt('rate_limit_per_day');
-    const perMinute = await settings.getInt('rate_limit_per_minute');
-    if ((await repo.countSendsSince(input.now - DAY_MS, 'cold')) >= perDay) {
+    const perDay = await readLimit(settings, 'rate_limit_per_day');
+    const perMinute = await readLimit(settings, 'rate_limit_per_minute');
+    if ((await repo.countSendsSince(now - DAY_MS, 'cold')) >= perDay) {
       return { ok: false, reason: 'rate_limit_day' };
     }
-    if ((await repo.countSendsSince(input.now - MINUTE_MS, 'cold')) >= perMinute) {
+    if ((await repo.countSendsSince(now - MINUTE_MS, 'cold')) >= perMinute) {
       return { ok: false, reason: 'rate_limit_minute' };
     }
   }
