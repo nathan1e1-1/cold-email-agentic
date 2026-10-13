@@ -45,3 +45,21 @@ npm run tauri dev
 ```
 
 In the app: **Connect Gmail** → grant access → your inbox threads appear.
+
+## 6. Draft script (test the AI on real threads)
+
+Before wiring the UI, you can generate drafts straight from your real inbox:
+
+```bash
+GOOGLE_CLIENT_ID=your-client-id \
+GOOGLE_CLIENT_SECRET=your-client-secret \
+GEMINI_API_KEY=your-gemini-key \
+npm run draft
+```
+
+It opens your browser for Google consent (loopback on `127.0.0.1:8765`), fetches your most
+recent threads, and prints an AI draft for each so you can judge the tone.
+
+Optional env vars: `GMAIL_LIMIT` (default `3`), `TONE` (`professional` | `friendly` |
+`concise` | `direct` | `match`, default `professional`), `OAUTH_PORT` (default `8765`).
+
