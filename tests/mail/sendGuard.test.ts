@@ -1,0 +1,71 @@
+import { describe, it, expect } from 'vitest';
+import { NodeRepository } from '../../src/db/nodeRepository';
+import { SettingsService } from '../../src/services/settings';
+import { sendGuard, duplicateWarning } from '../../src/mail/sendGuard';
+
+function ctx() {
+  const repo = new NodeRepository(':memory:');
+  const settings = new SettingsService(repo);
+  return { repo, settings };
+}
+
+describe('sendGuard', () => {
+  it('blocks cold sends without a mailing address', async () => {
+    const { repo, settings } = ctx();
+    expect(await sendGuard(repo, settings, { kind: 'cold', toEmail: 'a@z.com', now: 1000 }))
+      .toEqual({ ok: false, reason: 'missing_mailing_address' });
+  });
+
+  it('allows cold sends once a mailing address is set', async () => {
+    const { repo, settings } = ctx();
+    await settings.set('mailing_address', '1 Main St');
+    expect(await sendGuard(repo, settings, { kind: 'cold', toEmail: 'a@z.com', now: 1000 }))
+      .toEqual({ ok: true });
+  });
+
+  it('does not require a mailing address for replies', async () => {
+    const { repo, settings } = ctx();
+    expect(await sendGuard(repo, settings, { kind: 'reply', toEmail: 'a@z.com', now: 1000 }))
+      .toEqual({ ok: true });
+  });
+
+  it('blocks do_not_contact addresses for any kind', async () => {
+    const { repo, settings } = ctx();
+    await settings.set('mailing_address', '1 Main St');
+    await repo.upsertContact({ name: 'A', email: 'a@z.com', notes: '', doNotContact: false });
+    await repo.setDoNotContact('a@z.com', true);
+    expect(await sendGuard(repo, settings, { kind: 'cold', toEmail: 'A@Z.com', now: 1000 }))
+      .toEqual({ ok: false, reason: 'do_not_contact' });
+    expect(await sendGuard(repo, settings, { kind: 'reply', toEmail: 'a@z.com', now: 1000 }))
+      .toEqual({ ok: false, reason: 'do_not_contact' });
+  });
+
+  it('enforces the per-day cold limit', async () => {
+    const { repo, settings } = ctx();
+    await settings.set('mailing_address', '1 Main St');
+    await settings.set('rate_limit_per_day', '2');
+    const now = 10 * 24 * 60 * 60 * 1000;
+    await repo.recordSend(now - 1000, 'cold', 'x@z.com');
+    await repo.recordSend(now - 2000, 'cold', 'y@z.com');
+    expect(await sendGuard(repo, settings, { kind: 'cold', toEmail: 'z@z.com', now }))
+      .toEqual({ ok: false, reason: 'rate_limit_day' });
+  });
+
+  it('enforces the per-minute cold limit', async () => {
+    const { repo, settings } = ctx();
+    await settings.set('mailing_address', '1 Main St');
+    await settings.set('rate_limit_per_day', '100');
+    await settings.set('rate_limit_per_minute', '1');
+    const now = 10 * 24 * 60 * 60 * 1000;
+    await repo.recordSend(now - 1000, 'cold', 'x@z.com');
+    expect(await sendGuard(repo, settings, { kind: 'cold', toEmail: 'z@z.com', now }))
+      .toEqual({ ok: false, reason: 'rate_limit_minute' });
+  });
+
+  it('warns on duplicate cold sends', async () => {
+    const { repo } = ctx();
+    await repo.recordSend(1, 'cold', 'x@z.com');
+    expect(await duplicateWarning(repo, 'X@Z.com')).toBe(true);
+    expect(await duplicateWarning(repo, 'new@z.com')).toBe(false);
+  });
+});
