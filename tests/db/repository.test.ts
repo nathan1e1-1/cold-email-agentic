@@ -190,4 +190,13 @@ describe('NodeRepository', () => {
     expect(await repo.getSetting('rate_limit_per_day')).toBe('25');
     expect(await repo.getSetting('missing')).toBeNull();
   });
+
+  it('stores a per-thread historyId', async () => {
+    const repo = mk();
+    const acc = await seedAccount(repo);
+    const t = { id: 'thr1', accountId: acc.rowId, subject: '', participants: [], labels: [],
+      messages: [], lastMessageAt: 1, snippet: '', inInbox: true, historyId: '500' };
+    expect((await repo.upsertThread(t)).historyId).toBe('500');
+    expect((await repo.upsertThread({ ...t, historyId: '600' })).historyId).toBe('600');
+  });
 });

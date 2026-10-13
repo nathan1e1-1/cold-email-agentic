@@ -78,6 +78,7 @@ describe('gmailParse', () => {
     const t = parseThread({ id: 't1', historyId: '99', messages: [messageResource()] }, 'me@x.com');
     expect(t.id).toBe('t1');
     expect(t.subject).toBe('Q3');
+    expect(t.historyId).toBe('99');
     expect(t.messages.length).toBe(1);
     expect(t.inInbox).toBe(true);
     expect(t.participants.map((p) => p.email)).toContain('sarah@acme.com');

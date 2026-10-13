@@ -83,8 +83,12 @@ CREATE INDEX IF NOT EXISTS idx_sends_kind_time ON sends(kind, sent_at);
 CREATE INDEX IF NOT EXISTS idx_sends_to ON sends(to_email);
 `;
 
+const MIGRATION_2 = `
+ALTER TABLE threads ADD COLUMN history_id TEXT;
+`;
+
 // Ordered, append-only. Each entry is applied once and bumps PRAGMA user_version.
-export const MIGRATIONS: readonly string[] = [MIGRATION_1];
+export const MIGRATIONS: readonly string[] = [MIGRATION_1, MIGRATION_2];
 
 export function migrate(db: Sqlite): void {
   db.exec('PRAGMA foreign_keys = ON;');

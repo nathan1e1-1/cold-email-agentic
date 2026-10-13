@@ -34,6 +34,7 @@ export interface Thread {
   snippet: string;
   inInbox: boolean;
   labels: string[];
+  historyId?: string | null;
 }
 
 export interface Account {

@@ -68,14 +68,14 @@ export class NodeRepository implements Repository {
   async upsertThread(t: Thread & { accountId: number }): Promise<RepoThread> {
     this.run(
       `INSERT INTO threads (account_id,provider_thread_id,subject,participants_json,labels_json,
-         last_message_at,snippet,in_inbox)
-       VALUES (?,?,?,?,?,?,?,?)
+         last_message_at,snippet,in_inbox,history_id)
+       VALUES (?,?,?,?,?,?,?,?,?)
        ON CONFLICT(provider_thread_id) DO UPDATE SET subject=excluded.subject,
          participants_json=excluded.participants_json,labels_json=excluded.labels_json,
          last_message_at=excluded.last_message_at,snippet=excluded.snippet,
-         in_inbox=excluded.in_inbox`,
+         in_inbox=excluded.in_inbox,history_id=excluded.history_id`,
       t.accountId, t.id, t.subject, j(t.participants), j(t.labels), t.lastMessageAt,
-      t.snippet, toBool(t.inInbox),
+      t.snippet, toBool(t.inInbox), t.historyId ?? null,
     );
     return (await this.getThreadByProviderId(t.id))!;
   }
@@ -245,7 +245,8 @@ export class NodeRepository implements Repository {
   private mapThread(r: any): RepoThread {
     return { rowId: r.id, accountId: r.account_id, id: r.provider_thread_id, subject: r.subject,
       participants: pj<Address[]>(r.participants_json, []), labels: pj<string[]>(r.labels_json, []),
-      messages: [], lastMessageAt: r.last_message_at, snippet: r.snippet, inInbox: bool(r.in_inbox) };
+      messages: [], lastMessageAt: r.last_message_at, snippet: r.snippet, inInbox: bool(r.in_inbox),
+      historyId: r.history_id ?? null };
   }
   private mapMessage(r: any): Message {
     return { id: r.provider_message_id, rfcMessageId: r.rfc_message_id,
