@@ -14,16 +14,19 @@ rustc --version && cargo --version
 
 ## 2. Create the Google OAuth client
 
-1. Go to the [Google Cloud Console](https://console.cloud.google.com/) and create a project.
+1. [Google Cloud Console](https://console.cloud.google.com/) → create (or pick) a project.
 2. **APIs & Services → Library** → enable the **Gmail API**.
-3. **APIs & Services → OAuth consent screen**:
-   - User type: **External** (use **Internal** instead if you have a Google Workspace account — no verification warning, no 100-user cap).
-   - Fill in app name + your email; save.
-   - **Publish the app** (Publishing status → **In production**). Staying **unverified is fine** for personal use (<100 users). *Do not leave it in "Testing"* — Testing refresh tokens expire in 7 days.
-   - Scopes: `gmail.readonly`, `gmail.send`, `userinfo.email`.
-4. **APIs & Services → Credentials → Create credentials → OAuth client ID**:
-   - Application type: **Desktop app**.
-   - Copy the **Client ID** (and Client Secret if shown). Paste them into the app's Settings when connecting.
+3. Open **Google Auth Platform** (console.cloud.google.com/auth/overview) → **Get started** to register the app:
+   - **App information**: app name + your email.
+   - **Audience**: **External** (choose **Internal** instead if you have a Google Workspace account — no verification warning, no 100-user cap).
+   - **Contact information**: your email. Agree and create.
+   - On the **Audience** page, set **Publishing status → Publish app** (**In production**). Unverified is fine for personal use (<100 users). *Do not leave it in "Testing"* — Testing refresh tokens expire in 7 days.
+   - On the **Data Access** page, add scopes: `gmail.readonly`, `gmail.send`, `userinfo.email`.
+4. **Google Auth Platform → Clients → Create client**:
+   - Application type: **Desktop app**. (No redirect URIs to register — desktop clients use the loopback flow with any `http://127.0.0.1:PORT`.)
+   - Click **Create**, then copy the **Client ID** and **Client secret**. The secret is shown **only once** — copy it immediately.
+5. Use them: for the draft script, pass them as `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` env vars (see §6). The app stores the resulting tokens in the macOS Keychain.
+
 
 > Security: the app requests only `gmail.readonly`, `gmail.send`, and `userinfo.email`. Tokens are stored in the macOS Keychain, never logged.
 
