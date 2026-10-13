@@ -20,6 +20,7 @@ rustc --version && cargo --version
    - **App information**: app name + your email.
    - **Audience**: **External** (choose **Internal** instead if you have a Google Workspace account — no verification warning, no 100-user cap).
    - **Contact information**: your email. Agree and create.
+   - On the **Branding** page, complete the required fields — **App name**, **User support email**, and **Developer contact information** (email). Google blocks publishing until branding is complete. (Logo, homepage, privacy, and terms links are optional for personal use.)
    - On the **Audience** page, set **Publishing status → Publish app** (**In production**). Unverified is fine for personal use (<100 users). *Do not leave it in "Testing"* — Testing refresh tokens expire in 7 days.
    - On the **Data Access** page, add scopes: `gmail.readonly`, `gmail.send`, `userinfo.email`.
 4. **Google Auth Platform → Clients → Create client**:
