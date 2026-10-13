@@ -73,4 +73,29 @@ describe('GeminiProvider', () => {
       host: 'generativelanguage.googleapis.com',
     });
   });
+
+  it('retries on 503 and then succeeds', async () => {
+    const http = new FakeHttpClient()
+      .queueResponse({ status: 503, body: '{"error":{"message":"busy"}}' })
+      .queueResponse({ status: 200, body: JSON.stringify({ candidates: [{ content: { parts: [{ text: 'ok' }] } }] }) });
+    const provider = new GeminiProvider({ http, apiKey: 'K', sleep: async () => {} });
+    expect(await provider.generate({ thread, ownEmail: 'me@x.com', tone: 'direct' })).toBe('ok');
+    expect(http.requests.length).toBe(2);
+  });
+
+  it('gives up after maxRetries on repeated 503', async () => {
+    const http = new FakeHttpClient();
+    for (let i = 0; i < 3; i++) http.queueResponse({ status: 503, body: '{"error":{"message":"busy"}}' });
+    const provider = new GeminiProvider({ http, apiKey: 'K', maxRetries: 2, sleep: async () => {} });
+    await expect(provider.generate({ thread, ownEmail: 'me@x.com', tone: 'direct' })).rejects.toThrow(/503/);
+    expect(http.requests.length).toBe(3);
+  });
+
+  it('does not retry a non-retryable error', async () => {
+    const http = new FakeHttpClient().queueResponse({ status: 400, body: JSON.stringify({ error: { message: 'bad' } }) });
+    await expect(
+      new GeminiProvider({ http, apiKey: 'K', sleep: async () => {} }).generate({ thread, ownEmail: 'me@x.com', tone: 'direct' }),
+    ).rejects.toThrow(/bad/);
+    expect(http.requests.length).toBe(1);
+  });
 });
