@@ -66,5 +66,7 @@ It opens your browser for Google consent (loopback on `127.0.0.1:8765`), fetches
 recent threads, and prints an AI draft for each so you can judge the tone.
 
 Optional env vars: `GMAIL_LIMIT` (default `3`), `TONE` (`professional` | `friendly` |
-`concise` | `direct` | `match`, default `professional`), `OAUTH_PORT` (default `8765`).
+`concise` | `direct` | `match`, default `professional`), `OAUTH_PORT` (default `8765`),
+`GEMINI_MODEL` (default `gemini-3.8-flash` — set this if Google retires the model again;
+the error response names the current one).
 

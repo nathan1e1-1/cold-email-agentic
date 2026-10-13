@@ -65,7 +65,7 @@ async function main(): Promise<void> {
   console.log(`Connected as ${ownEmail}\n`);
 
   const gmail = new GmailProvider({ http: nodeHttp, auth, ownEmail });
-  const gemini = new GeminiProvider({ http: nodeHttp, apiKey: geminiKey });
+  const gemini = new GeminiProvider({ http: nodeHttp, apiKey: geminiKey, model: process.env.GEMINI_MODEL });
 
   const { threads } = await gmail.listThreads({ sinceDays: 90, cap: limit });
   console.log(`Fetched ${threads.length} thread(s) — drafting with tone "${tone}"\n`);

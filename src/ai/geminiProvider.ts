@@ -3,7 +3,7 @@ import type { AiDescriptor, AiProvider, GenerateRequest } from './aiProvider';
 import { buildSystemPrompt, buildUserPrompt } from './prompt';
 
 const HOST = 'generativelanguage.googleapis.com';
-const MODEL = 'gemini-2.5-flash';
+const MODEL = 'gemini-3.8-flash';
 
 interface GeminiResponse {
   candidates?: { content?: { parts?: { text?: string }[] } }[];

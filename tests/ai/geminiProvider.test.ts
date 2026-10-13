@@ -33,7 +33,7 @@ describe('GeminiProvider', () => {
 
     const req = http.requests[0];
     expect(req.url).toBe(
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent',
     );
     expect(req.headers?.['x-goog-api-key']).toBe('KEY');
     const body = JSON.parse(req.body as string) as {
