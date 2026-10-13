@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildMime, buildRawMessage } from '../../src/mail/mime';
-import { base64UrlToUtf8 } from '../../src/mail/encoding';
+import { base64ToUtf8, base64UrlToUtf8 } from '../../src/mail/encoding';
 
 const base = { from: 'me@x.com', to: ['them@y.com'], subject: 'Hi', bodyText: 'Hello there' };
 const fixed = { messageId: '<id@x.com>', date: new Date('2026-10-12T10:00:00Z') };
@@ -43,5 +43,39 @@ describe('buildMime', () => {
     const encoded = buildRawMessage(base, fixed);
     expect(encoded).not.toMatch(/[+/=]/);
     expect(base64UrlToUtf8(encoded)).toContain('From: me@x.com');
+  });
+
+  it('rejects CR/LF in header values (header injection)', () => {
+    expect(() => buildMime({ ...base, subject: 'Hi\r\nBcc: evil@x.com' }, fixed)).toThrow(/CR\/LF/);
+    expect(() => buildMime({ ...base, to: ['v@y.com\r\nBcc: evil@x.com'] }, fixed)).toThrow(/CR\/LF/);
+    expect(() => buildMime({ ...base, references: ['<a@x>\r\nBcc: evil@x.com'] }, fixed)).toThrow(/CR\/LF/);
+  });
+
+  it('includes Cc when provided', () => {
+    expect(buildMime({ ...base, cc: ['cc@y.com'] }, fixed)).toContain('Cc: cc@y.com\r\n');
+  });
+
+  it('normalizes body newlines to CRLF and round-trips the body', () => {
+    const raw = buildMime({ ...base, bodyText: 'line1\nline2' }, fixed);
+    const b64 = raw.split('\r\n\r\n')[1].replace(/\r\n/g, '');
+    expect(base64ToUtf8(b64)).toBe('line1\r\nline2');
+  });
+
+  it('throws when there are no recipients', () => {
+    expect(() => buildMime({ ...base, to: [] }, fixed)).toThrow(/recipient/i);
+  });
+
+  it('splits long non-ASCII subjects into encoded-words within the 75-char limit', () => {
+    const raw = buildMime({ ...base, subject: '日本語のとても長い件名'.repeat(6) }, fixed);
+    expect(raw).toContain('Subject: =?UTF-8?B?');
+    const words = raw.match(/=\?UTF-8\?B\?[^?]+\?=/g) ?? [];
+    expect(words.length).toBeGreaterThan(1);
+    for (const w of words) expect(w.length).toBeLessThanOrEqual(75);
+  });
+
+  it('generates a well-formed Message-ID for a display-name From', () => {
+    const raw = buildMime({ ...base, from: 'Nathan <me@x.com>' });
+    const line = raw.split('\r\n').find((l) => l.startsWith('Message-ID:'))!;
+    expect(line).toMatch(/^Message-ID: <[^<>]+@x\.com>$/);
   });
 });
