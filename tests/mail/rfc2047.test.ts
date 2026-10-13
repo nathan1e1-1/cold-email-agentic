@@ -17,4 +17,7 @@ describe('decodeRfc2047', () => {
   it('decodes mixed plain and encoded text', () => {
     expect(decodeRfc2047('Re: =?UTF-8?B?Q2Fmw6k=?=')).toBe('Re: Café');
   });
+  it('returns the raw value when an encoded-word is malformed', () => {
+    expect(decodeRfc2047('=?UTF-8?B?!!!notbase64!!!?=')).toBe('!!!notbase64!!!');
+  });
 });

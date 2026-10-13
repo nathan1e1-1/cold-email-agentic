@@ -83,4 +83,49 @@ describe('gmailParse', () => {
     expect(t.participants.map((p) => p.email)).toContain('sarah@acme.com');
     expect(t.lastMessageAt).toBe(1000);
   });
+
+  it('splits recipient lists without breaking quoted display names', () => {
+    const res = messageResource();
+    res.payload!.headers = [
+      { name: 'From', value: 'a@x.com' },
+      { name: 'To', value: '"Doe, John" <j@x.com>, b@y.com' },
+    ];
+    const m = parseMessage(res, 'me@x.com');
+    expect(m.to).toEqual([{ name: 'Doe, John', email: 'j@x.com' }, { email: 'b@y.com' }]);
+  });
+
+  it('separates text and html bodies and never puts markup in bodyText', () => {
+    const res = messageResource();
+    res.payload!.mimeType = 'multipart/alternative';
+    res.payload!.parts = [{ mimeType: 'text/html', body: { data: utf8ToBase64Url('<p>Hi <b>there</b></p>') } }];
+    const m = parseMessage(res, 'me@x.com');
+    expect(m.bodyText).not.toContain('<');
+    expect(m.bodyText).toBe('Hi there');
+    expect(m.bodyHtml).toBe('<p>Hi <b>there</b></p>');
+  });
+
+  it('skips text/plain attachments when choosing the body', () => {
+    const res = messageResource();
+    res.payload!.mimeType = 'multipart/mixed';
+    res.payload!.parts = [
+      { mimeType: 'text/plain', body: { data: utf8ToBase64Url('the body') } },
+      { mimeType: 'text/plain', filename: 'notes.txt', body: { data: utf8ToBase64Url('attachment text') } },
+    ];
+    expect(parseMessage(res, 'me@x.com').bodyText).toBe('the body');
+  });
+
+  it('unions labels across messages and uses the max date', () => {
+    const older = messageResource();
+    older.id = 'm0';
+    older.internalDate = '500';
+    older.labelIds = ['SENT'];
+    const newer = messageResource();
+    newer.id = 'm2';
+    newer.internalDate = '2000';
+    newer.labelIds = ['INBOX'];
+    const t = parseThread({ id: 't1', messages: [newer, older] }, 'me@x.com');
+    expect(t.lastMessageAt).toBe(2000);
+    expect([...t.labels].sort()).toEqual(['INBOX', 'SENT']);
+    expect(t.inInbox).toBe(true);
+  });
 });

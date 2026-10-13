@@ -4,9 +4,11 @@ import { base64UrlToUtf8 } from './encoding';
 import { decodeRfc2047 } from './rfc2047';
 
 export interface GmailHeader { name: string; value: string }
-export interface GmailBody { data?: string; size?: number }
+export interface GmailBody { data?: string; size?: number; attachmentId?: string }
 export interface GmailPayload {
+  partId?: string;
   mimeType?: string;
+  filename?: string;
   headers?: GmailHeader[];
   body?: GmailBody;
   parts?: GmailPayload[];
@@ -17,6 +19,7 @@ export interface GmailMessageResource {
   labelIds?: string[];
   snippet?: string;
   internalDate?: string;
+  historyId?: string;
   payload?: GmailPayload;
 }
 export interface GmailThreadResource {
@@ -36,17 +39,67 @@ function decode(data: string | undefined): string {
   return data ? base64UrlToUtf8(data) : '';
 }
 
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+export function collectBody(payload: GmailPayload | undefined): { text: string; html?: string } {
+  let text = '';
+  let html = '';
+  const walk = (p: GmailPayload | undefined): void => {
+    if (!p || p.filename) return;
+    if (p.mimeType === 'text/plain' && p.body?.data) {
+      if (!text) text = decode(p.body.data);
+    } else if (p.mimeType === 'text/html' && p.body?.data) {
+      if (!html) html = decode(p.body.data);
+    } else if (p.parts) {
+      for (const part of p.parts) walk(part);
+    } else if (p.body?.data && !text) {
+      text = decode(p.body.data);
+    }
+  };
+  walk(payload);
+  return { text: text || (html ? stripHtml(html) : ''), html: html || undefined };
+}
+
 export function collectTextBody(payload: GmailPayload | undefined): string {
-  if (!payload) return '';
-  if (payload.mimeType === 'text/plain' && payload.body?.data) return decode(payload.body.data);
-  if (payload.parts) {
-    for (const part of payload.parts) {
-      const text = collectTextBody(part);
-      if (text) return text;
+  return collectBody(payload).text;
+}
+
+function splitAddressList(value: string): string[] {
+  const parts: string[] = [];
+  let current = '';
+  let inQuote = false;
+  let angleDepth = 0;
+  let escaped = false;
+  for (let i = 0; i < value.length; i++) {
+    const c = value[i];
+    if (escaped) {
+      current += c;
+      escaped = false;
+      continue;
+    }
+    if (c === '\\') {
+      current += c;
+      escaped = true;
+      continue;
+    }
+    if (c === '"') {
+      inQuote = !inQuote;
+      current += c;
+      continue;
+    }
+    if (c === '<') angleDepth++;
+    else if (c === '>') angleDepth = Math.max(0, angleDepth - 1);
+    if (c === ',' && !inQuote && angleDepth === 0) {
+      parts.push(current);
+      current = '';
+    } else {
+      current += c;
     }
   }
-  if (payload.body?.data) return decode(payload.body.data);
-  return '';
+  if (current.trim()) parts.push(current);
+  return parts.map((s) => s.trim()).filter(Boolean);
 }
 
 function parseAddress(value: string): Address {
@@ -59,17 +112,15 @@ function parseAddress(value: string): Address {
 }
 
 function parseAddressList(value: string): Address[] {
-  return value
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .map(parseAddress);
+  return splitAddressList(value).map(parseAddress);
 }
 
 export function parseMessage(res: GmailMessageResource, ownEmail: string): Message {
   const headers = res.payload?.headers;
   const from = parseAddress(headerValue(headers, 'From'));
   const references = headerValue(headers, 'References').split(/\s+/).filter(Boolean);
+  const body = collectBody(res.payload);
+  const listUnsubscribe = headerValue(headers, 'List-Unsubscribe').trim();
   return {
     id: res.id,
     rfcMessageId: headerValue(headers, 'Message-ID'),
@@ -78,8 +129,9 @@ export function parseMessage(res: GmailMessageResource, ownEmail: string): Messa
     to: parseAddressList(headerValue(headers, 'To')),
     cc: parseAddressList(headerValue(headers, 'Cc')),
     subject: decodeRfc2047(headerValue(headers, 'Subject')),
-    bodyText: collectTextBody(res.payload),
-    hasListUnsubscribe: headerValue(headers, 'List-Unsubscribe') !== '',
+    bodyText: body.text,
+    bodyHtml: body.html,
+    hasListUnsubscribe: listUnsubscribe !== '' && listUnsubscribe !== '<>',
     date: Number(res.internalDate ?? 0),
     direction: computeDirection(from, ownEmail),
   };
@@ -87,11 +139,10 @@ export function parseMessage(res: GmailMessageResource, ownEmail: string): Messa
 
 export function parseThread(res: GmailThreadResource, ownEmail: string): Thread {
   const messages = (res.messages ?? []).map((m) => parseMessage(m, ownEmail));
-  const last = messages[messages.length - 1];
   const participants: Address[] = [];
   const seen = new Set<string>();
   for (const m of messages) {
-    for (const a of [m.from, ...m.to]) {
+    for (const a of [m.from, ...m.to, ...m.cc]) {
       const key = a.email.toLowerCase();
       if (a.email && !seen.has(key)) {
         seen.add(key);
@@ -99,15 +150,16 @@ export function parseThread(res: GmailThreadResource, ownEmail: string): Thread 
       }
     }
   }
-  const inInbox = (res.messages ?? []).some((m) => m.labelIds?.includes('INBOX'));
+  const labels = Array.from(new Set((res.messages ?? []).flatMap((m) => m.labelIds ?? [])));
+  const lastMessageAt = messages.length > 0 ? Math.max(...messages.map((m) => m.date)) : 0;
   return {
     id: res.id,
     subject: messages[0]?.subject ?? '',
     participants,
     messages,
-    lastMessageAt: last?.date ?? 0,
+    lastMessageAt,
     snippet: res.snippet ?? '',
-    inInbox,
-    labels: res.messages?.[0]?.labelIds ?? [],
+    inInbox: labels.includes('INBOX'),
+    labels,
   };
 }
