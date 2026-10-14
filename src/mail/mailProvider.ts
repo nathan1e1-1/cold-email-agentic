@@ -32,7 +32,7 @@ export interface MailProvider {
   auth(): Promise<void>;
   isAuthed(): Promise<boolean>;
   getProfile(): Promise<GmailProfile>;
-  listThreads(opts: { sinceDays: number; cap: number }): Promise<ListThreadsResult>;
+  listThreads(opts: { sinceDays: number; cap: number; query?: string }): Promise<ListThreadsResult>;
   getThread(id: string): Promise<Thread>;
   getThreadsByIds(ids: string[]): Promise<Thread[]>;
   listHistoryChanges(opts: { historyId: string }): Promise<HistoryDelta>;

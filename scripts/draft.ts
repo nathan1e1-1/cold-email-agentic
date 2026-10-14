@@ -8,7 +8,7 @@ import { GeminiProvider } from '../src/ai/geminiProvider';
 import { GroqProvider } from '../src/ai/groqProvider';
 import { listGeminiModels, pickGeminiModel } from '../src/ai/geminiModels';
 import type { AiProvider, GenerateRequest } from '../src/ai/aiProvider';
-import type { TonePreset } from '../src/domain/types';
+import type { Thread, TonePreset } from '../src/domain/types';
 
 const nodeHttp: HttpClient = {
   async request(req) {
@@ -119,18 +119,29 @@ async function main(): Promise<void> {
   console.log(`Connected as ${ownEmail}\n`);
 
   const gmail = new GmailProvider({ http: nodeHttp, auth, ownEmail });
-  const fetchCap = Number(process.env.GMAIL_FETCH ?? 25);
-  const { threads } = await gmail.listThreads({ sinceDays: 90, cap: fetchCap });
 
-  const includeJunk = process.env.INCLUDE_JUNK === '1';
-  const eligible = includeJunk ? threads : threads.filter((thread) => !isJunkThread(thread));
-  const skipped = threads.length - eligible.length;
-  if (skipped > 0) {
-    console.log(`Skipped ${skipped} automated/no-reply thread(s). Set INCLUDE_JUNK=1 to include them.`);
+  let threadsToDraft: Thread[];
+  const threadId = process.env.GMAIL_THREAD_ID;
+  if (threadId) {
+    console.log(`Drafting a single thread: ${threadId}\n`);
+    threadsToDraft = [await gmail.getThread(threadId)];
+  } else {
+    const fetchCap = Number(process.env.GMAIL_FETCH ?? 25);
+    const query = process.env.GMAIL_QUERY;
+    if (query) console.log(`Gmail query: ${query}`);
+    const { threads } = await gmail.listThreads({ sinceDays: 90, cap: fetchCap, query });
+
+    const includeJunk = process.env.INCLUDE_JUNK === '1';
+    const eligible = includeJunk ? threads : threads.filter((thread) => !isJunkThread(thread));
+    const skipped = threads.length - eligible.length;
+    if (skipped > 0) {
+      console.log(`Skipped ${skipped} automated/no-reply thread(s). Set INCLUDE_JUNK=1 to include them.`);
+    }
+    console.log(`Drafting ${Math.min(limit, eligible.length)} of ${eligible.length} eligible thread(s) — tone "${tone}"\n`);
+    threadsToDraft = eligible.slice(0, limit);
   }
-  console.log(`Drafting ${Math.min(limit, eligible.length)} of ${eligible.length} eligible thread(s) — tone "${tone}"\n`);
 
-  for (const thread of eligible.slice(0, limit)) {
+  for (const thread of threadsToDraft) {
     const { text, label } = await generateWithFallback(providers, { thread, ownEmail, tone });
     const last = thread.messages[thread.messages.length - 1];
     console.log('='.repeat(72));

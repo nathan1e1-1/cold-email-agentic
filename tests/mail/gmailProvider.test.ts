@@ -77,6 +77,13 @@ describe('GmailProvider', () => {
     expect(new URL(http.requests[0].url).searchParams.get('q')).toContain('newer_than:90d');
   });
 
+  it('appends a custom query to the thread search', async () => {
+    const http = router();
+    await provider(http).listThreads({ sinceDays: 90, cap: 5, query: 'is:unread -category:promotions' });
+    const q = new URL(http.requests[0].url).searchParams.get('q') ?? '';
+    expect(q).toContain('is:unread -category:promotions');
+  });
+
   it('gets a single thread', async () => {
     const t = await provider(router()).getThread('t1');
     expect(t.id).toBe('t1');

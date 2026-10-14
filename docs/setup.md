@@ -75,3 +75,10 @@ Optional env vars: `GMAIL_LIMIT` (default `3`), `TONE` (`professional` | `friend
 `concise` | `direct` | `match`, default `professional`), `OAUTH_PORT` (default `8765`),
 `GEMINI_MODEL`, `GROQ_API_KEY`, `GROQ_MODEL`, `AI_PROVIDER` (`gemini` | `groq`, to reorder).
 
+**Targeting a real conversation** (most inboxes are mostly automated mail, so the newest-N
+default can surface only newsletters):
+- `GMAIL_THREAD_ID=<id>` — draft for one thread. Find the id in the Gmail URL after `#inbox/`.
+- `GMAIL_QUERY="is:unread from:someone@example.com"` — extra Gmail search terms.
+- `GMAIL_FETCH` (default `25`) — how many threads to scan before filtering.
+- `INCLUDE_JUNK=1` — include automated/no-reply threads (skipped by default).
+

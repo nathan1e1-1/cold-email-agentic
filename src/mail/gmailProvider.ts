@@ -62,8 +62,10 @@ export class GmailProvider implements MailProvider {
     return { emailAddress: json.emailAddress ?? '', historyId: json.historyId ?? '0' };
   }
 
-  async listThreads(opts: { sinceDays: number; cap: number }): Promise<ListThreadsResult> {
-    const q = encodeURIComponent(`in:inbox newer_than:${opts.sinceDays}d`);
+  async listThreads(opts: { sinceDays: number; cap: number; query?: string }): Promise<ListThreadsResult> {
+    const q = encodeURIComponent(
+      [`in:inbox newer_than:${opts.sinceDays}d`, opts.query].filter(Boolean).join(' '),
+    );
     const res = await this.request('GET', `/threads?q=${q}&maxResults=${opts.cap}`);
     const json = JSON.parse(res.body) as { threads?: { id: string }[] };
     const ids = (json.threads ?? []).map((t) => t.id);
