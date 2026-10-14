@@ -1,23 +1,13 @@
 import { useCallback, useState } from 'react'
 import './App.css'
 import type { Account, Thread, TonePreset } from './domain/types'
-import { TONE_PRESETS } from './domain/types'
 import type { AiProvider } from './ai/aiProvider'
 import type { MailboxProvider } from './services/mailbox'
 import { createAiProvider, createMailboxProvider, type MailboxMode } from './services/providerFactory'
 import { SettingsDialog } from './SettingsDialog'
-
-function formatDate(ts: number): string {
-  return new Date(ts).toLocaleString(undefined, {
-    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-  })
-}
-
-function lastSender(thread: Thread): string {
-  const last = thread.messages.at(-1)
-  if (!last) return 'Unknown'
-  return last.direction === 'outbound' ? 'You' : last.from.name ?? last.from.email
-}
+import { ThreadList } from './components/ThreadList'
+import { ReaderPane } from './components/ReaderPane'
+import { DraftPanel } from './components/DraftPanel'
 
 function App() {
   const [mode, setMode] = useState<MailboxMode>('mock')
@@ -47,11 +37,8 @@ function App() {
       setGenerating(true); setError(null); setStatus(null)
       try {
         setDraft(await aiProvider.generate({
-          thread,
-          ownEmail: acc.ownEmail,
-          tone: nextTone,
-          instruction: opts.instruction,
-          priorDraft: opts.priorDraft,
+          thread, ownEmail: acc.ownEmail, tone: nextTone,
+          instruction: opts.instruction, priorDraft: opts.priorDraft,
         }))
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err))
@@ -114,6 +101,23 @@ function App() {
     }
   }, [mailbox, selected, draft])
 
+  const handleTone = useCallback(
+    (next: TonePreset) => {
+      setTone(next)
+      if (selected && ai && account) void generate(ai, account, selected, next, {})
+    },
+    [selected, ai, account, generate],
+  )
+
+  const handleRegenerate = useCallback(() => {
+    if (selected && ai && account) {
+      void generate(ai, account, selected, tone, {
+        instruction: instruction || undefined,
+        priorDraft: draft || undefined,
+      })
+    }
+  }, [selected, ai, account, tone, instruction, draft, generate])
+
   const canSend = mailbox !== null && selected !== null && draft.trim() !== ''
 
   return (
@@ -143,109 +147,35 @@ function App() {
       {status && <div className="banner ok">{status}</div>}
 
       <div className="workspace">
-        <aside className="list">
-          <div className="list-head">
-            Inbox <span className="count">{threads.length}</span>
-          </div>
-          <ul>
-            {threads.map((t) => (
-              <li key={t.id}>
-                <button
-                  type="button"
-                  className={t.id === selectedId ? 'thread selected' : 'thread'}
-                  onClick={() => { if (mailbox && account) void openThread(mailbox, t.id, ai, account) }}
-                >
-                  <span className="thread-top">
-                    <span className="thread-sender">{lastSender(t)}</span>
-                    <span className="thread-date">{formatDate(t.lastMessageAt)}</span>
-                  </span>
-                  <span className="thread-subject">{t.subject}</span>
-                  <span className="thread-snippet">{t.snippet}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </aside>
+        <ThreadList
+          threads={threads}
+          selectedId={selectedId}
+          onSelect={(id) => { if (mailbox && account) void openThread(mailbox, id, ai, account) }}
+        />
 
         <main className="reader">
           {selected ? (
             <>
-              <div className="reader-head">
-                <h1>{selected.subject}</h1>
-                <p className="participants">
-                  {selected.participants.map((p) => p.name ?? p.email).join(', ')}
-                </p>
-              </div>
-
-              <ol className="messages">
-                {selected.messages.map((m) => (
-                  <li key={m.id} className={`message ${m.direction}`}>
-                    <div className="message-meta">
-                      <span className="message-from">{m.direction === 'outbound' ? 'You' : m.from.name ?? m.from.email}</span>
-                      <span className="message-date">{formatDate(m.date)}</span>
-                    </div>
-                    <div className="message-body">{m.bodyText}</div>
-                  </li>
-                ))}
-              </ol>
-
-              <div className="draft-panel">
-                <div className="draft-head">
-                  <span className="draft-title">AI draft</span>
-                  {ai && (
-                    <span className={`badge privacy-${ai.descriptor.privacy}`}>
-                      {ai.descriptor.privacy === 'local' ? 'local model' : 'may use content'}
-                    </span>
-                  )}
-                  {generating && <span className="hint">generating…</span>}
-                  {!ai && <span className="hint">add an AI key in Settings</span>}
-                </div>
-                <div className="tones">
-                  {TONE_PRESETS.map((t) => (
-                    <button
-                      key={t}
-                      type="button"
-                      className={t === tone ? 'tone active' : 'tone'}
-                      disabled={generating}
-                      onClick={() => { setTone(t); if (selected && ai && account) void generate(ai, account, selected, t, {}) }}
-                    >
-                      {t}
-                    </button>
-                  ))}
-                </div>
-                <textarea
-                  className="draft-text"
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  placeholder="The agent's draft appears here…"
-                  rows={5}
-                />
-                <div className="draft-controls">
-                  <input
-                    className="instruction"
-                    value={instruction}
-                    onChange={(e) => setInstruction(e.target.value)}
-                    placeholder="Nudge: shorter, warmer, ask about timing…"
-                  />
-                  <button
-                    type="button"
-                    className="regen"
-                    disabled={generating || !ai}
-                    onClick={() => { if (selected && ai && account) void generate(ai, account, selected, tone, { instruction: instruction || undefined, priorDraft: draft || undefined }) }}
-                  >
-                    Regenerate
-                  </button>
-                  <button type="button" className="send" disabled={!canSend || generating} onClick={() => void onSend()}>
-                    Send
-                  </button>
-                </div>
-                <span className="hint">
-                  {mode === 'gmail' ? 'Sends a real reply from your Gmail account.' : 'Simulated send (mock inbox).'}
-                </span>
-              </div>
+              <ReaderPane thread={selected} />
+              <DraftPanel
+                ai={ai}
+                mode={mode}
+                generating={generating}
+                draft={draft}
+                onDraftChange={setDraft}
+                tone={tone}
+                onToneChange={handleTone}
+                instruction={instruction}
+                onInstructionChange={setInstruction}
+                onRegenerate={handleRegenerate}
+                onSend={() => void onSend()}
+                canSend={canSend}
+              />
             </>
           ) : (
-            <div className="empty">{busy ?? (account ? 'Select a conversation' : 'Click “Gmail” to connect, or “Mock” to try it out.')}</div>
+            <div className="empty">
+              {busy ?? (account ? 'Select a conversation' : 'Click “Gmail” to connect, or “Mock” to try it out.')}
+            </div>
           )}
         </main>
       </div>

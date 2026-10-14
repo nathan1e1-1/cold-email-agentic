@@ -37,6 +37,7 @@ pub fn run() {
     .plugin(tauri_plugin_http::init())
     .plugin(tauri_plugin_oauth::init())
     .plugin(tauri_plugin_opener::init())
+    .plugin(tauri_plugin_sql::Builder::default().build())
     .invoke_handler(tauri::generate_handler![secret_set, secret_get, secret_delete])
     .setup(|app| {
       if cfg!(debug_assertions) {
