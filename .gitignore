@@ -15,6 +15,7 @@ src-tauri/target/
 # env & secrets
 .env
 .env.*
+!.env.example
 *.local
 secrets/
 *.key

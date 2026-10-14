@@ -56,7 +56,7 @@ function fakeProvider(overrides: Partial<MailProvider> = {}): { provider: MailPr
 describe('GmailMailboxAdapter', () => {
   it('connects and reports the account', async () => {
     const { provider } = fakeProvider();
-    const adapter = new GmailMailboxAdapter(provider);
+    const adapter = new GmailMailboxAdapter(() => provider);
     expect(adapter.isConnected()).toBe(false);
     const account = await adapter.connect();
     expect(account.ownEmail).toBe('me@x.com');
@@ -65,7 +65,8 @@ describe('GmailMailboxAdapter', () => {
 
   it('lists threads', async () => {
     const { provider } = fakeProvider();
-    const adapter = new GmailMailboxAdapter(provider);
+    const adapter = new GmailMailboxAdapter(() => provider);
+    await adapter.connect();
     expect((await adapter.listThreads()).map((t) => t.id)).toEqual(['t1']);
   });
 
@@ -75,13 +76,13 @@ describe('GmailMailboxAdapter', () => {
         throw new Error('nope');
       },
     });
-    const adapter = new GmailMailboxAdapter(provider);
+    const adapter = new GmailMailboxAdapter(() => provider);
     expect(await adapter.getThread('t1')).toBeNull();
   });
 
   it('maps a reply to a threaded DraftInput', async () => {
     const { provider, sent } = fakeProvider();
-    const adapter = new GmailMailboxAdapter(provider);
+    const adapter = new GmailMailboxAdapter(() => provider);
     await adapter.connect();
     const message = await adapter.send('t1', 'Sounds good.');
     expect(message.direction).toBe('outbound');

@@ -44,14 +44,30 @@ Create a free API key at [Google AI Studio](https://aistudio.google.com/apikey).
 
 Install [Ollama](https://ollama.com), then `ollama pull llama3.1`. Select Ollama as the AI provider in Settings to keep all content on-device.
 
-## 5. Run the app
+## 5. Configure and run the app
+
+Create a `.env` in the project root (copy `.env.example`) and fill it in:
+
+```
+VITE_GOOGLE_CLIENT_ID=your-desktop-client-id
+VITE_GOOGLE_CLIENT_SECRET=your-client-secret
+VITE_OAUTH_REDIRECT_URI=http://127.0.0.1:8765
+VITE_AI_PROVIDER=gemini
+VITE_GEMINI_API_KEY=your-gemini-key
+VITE_GROQ_API_KEY=your-groq-key   # optional fallback
+```
+
+Then:
 
 ```bash
 npm install
 npm run tauri dev
 ```
 
-In the app: **Connect Gmail** → grant access → your inbox threads appear.
+In the app, click **Gmail** (top right) → your browser opens for consent → your inbox threads
+appear. Click a thread and the **AI draft** appears at the bottom, with tone chips and
+**Regenerate** (add a nudge like "shorter" and hit Regenerate). Click **Mock** to use the
+built-in sample inbox instead. Tokens are stored in the macOS Keychain.
 
 ## 6. Draft script (test the AI on real threads)
 
