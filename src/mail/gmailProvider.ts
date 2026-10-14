@@ -30,22 +30,37 @@ function ensureOk(res: { status: number; body: string }, context: string): void 
   if (res.status >= 400) throw new Error(`${context}: ${describeError(res)}`);
 }
 
+function isQuotaError(res: { status: number; body: string }): boolean {
+  if (res.status === 429) return true;
+  if (res.status !== 403) return false;
+  return /quota|rate ?limit|userRateLimit|Quota exceeded/i.test(res.body);
+}
+
 export class GmailProvider implements MailProvider {
   private http: HttpClient;
   private authenticator: Authenticator;
   private ownEmail: string;
   private concurrency: number;
+  private maxRetries: number;
+  private backoffMs: number;
+  private sleep: (ms: number) => Promise<void>;
 
   constructor(deps: {
     http: HttpClient;
     auth: Authenticator;
     ownEmail: string;
     concurrency?: number;
+    maxRetries?: number;
+    backoffMs?: number;
+    sleep?: (ms: number) => Promise<void>;
   }) {
     this.http = deps.http;
     this.authenticator = deps.auth;
     this.ownEmail = deps.ownEmail;
-    this.concurrency = deps.concurrency ?? 5;
+    this.concurrency = deps.concurrency ?? 3;
+    this.maxRetries = deps.maxRetries ?? 3;
+    this.backoffMs = deps.backoffMs ?? 1500;
+    this.sleep = deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
   }
 
   async auth(): Promise<void> {
@@ -61,13 +76,20 @@ export class GmailProvider implements MailProvider {
     path: string,
     opts: RequestOptions = {},
   ): Promise<{ status: number; body: string }> {
-    const token = await this.authenticator.getAccessToken();
-    return this.http.request({
-      method,
-      url: `${BASE}${path}`,
-      headers: { Authorization: `Bearer ${token}`, ...(opts.headers ?? {}) },
-      body: opts.body,
-    });
+    for (let attempt = 0; ; attempt++) {
+      const token = await this.authenticator.getAccessToken();
+      const res = await this.http.request({
+        method,
+        url: `${BASE}${path}`,
+        headers: { Authorization: `Bearer ${token}`, ...(opts.headers ?? {}) },
+        body: opts.body,
+      });
+      if (isQuotaError(res) && attempt < this.maxRetries) {
+        await this.sleep(this.backoffMs * 2 ** attempt);
+        continue;
+      }
+      return res;
+    }
   }
 
   async getProfile(): Promise<GmailProfile> {

@@ -57,8 +57,11 @@ function router(): FakeHttpClient {
   });
 }
 
-function provider(http: FakeHttpClient) {
-  return new GmailProvider({ http, auth, ownEmail: 'me@x.com', concurrency: 2 });
+function provider(
+  http: FakeHttpClient,
+  overrides: Partial<{ concurrency: number; maxRetries: number; sleep: (ms: number) => Promise<void> }> = {},
+) {
+  return new GmailProvider({ http, auth, ownEmail: 'me@x.com', concurrency: 2, ...overrides });
 }
 
 describe('GmailProvider', () => {
@@ -161,5 +164,27 @@ describe('GmailProvider', () => {
       body: JSON.stringify({ error: { status: 'PERMISSION_DENIED', message: 'Insufficient Permission' } }),
     }));
     await expect(provider(http).listThreads({ sinceDays: 90, cap: 10 })).rejects.toThrow(/Insufficient Permission/);
+  });
+
+  it('retries a quota error and then succeeds', async () => {
+    const http = new FakeHttpClient()
+      .queueResponse({
+        status: 403,
+        body: JSON.stringify({ error: { status: 'PERMISSION_DENIED', message: "Quota exceeded for quota metric 'Total Query Cost'" } }),
+      })
+      .queueResponse({ status: 200, body: JSON.stringify(threadRes('t1', 'sarah@acme.com', 'Q3')) });
+    const p = provider(http, { sleep: async () => {} });
+    expect((await p.getThread('t1')).id).toBe('t1');
+    expect(http.requests.length).toBe(2);
+  });
+
+  it('gives up after maxRetries on a sustained quota error', async () => {
+    const http = new FakeHttpClient();
+    for (let i = 0; i < 3; i++) {
+      http.queueResponse({ status: 403, body: JSON.stringify({ error: { message: 'Quota exceeded' } }) });
+    }
+    const p = provider(http, { maxRetries: 2, sleep: async () => {} });
+    await expect(p.getThread('t1')).rejects.toThrow(/Quota exceeded/);
+    expect(http.requests.length).toBe(3);
   });
 });

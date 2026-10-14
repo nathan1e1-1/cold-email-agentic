@@ -37,7 +37,7 @@ export class GmailMailboxAdapter implements MailboxProvider {
   }
 
   async listThreads(): Promise<Thread[]> {
-    const { threads } = await this.requireProvider().listThreads({ sinceDays: 90, cap: 200 });
+    const { threads } = await this.requireProvider().listThreads({ sinceDays: 90, cap: 50 });
     return threads;
   }
 
