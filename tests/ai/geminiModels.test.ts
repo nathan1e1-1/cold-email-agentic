@@ -23,6 +23,10 @@ describe('geminiModels', () => {
     expect(pickGeminiModel(['gemini-3-pro', 'gemini-3.8-flash', 'gemini-3-flash-preview'])).toBe('gemini-3.8-flash');
   });
 
+  it('ignores paid/omni/pro models', () => {
+    expect(pickGeminiModel(['gemini-omni-1.1-flash', 'gemini-3-pro', 'gemini-3.8-flash'])).toBe('gemini-3.8-flash');
+  });
+
   it('falls back to any usable model', () => {
     expect(pickGeminiModel(['gemini-3-pro'])).toBe('gemini-3-pro');
   });

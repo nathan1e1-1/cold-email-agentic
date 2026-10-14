@@ -25,11 +25,14 @@ export async function listGeminiModels(http: HttpClient, apiKey: string): Promis
     .filter(Boolean);
 }
 
+const EXCLUDE_TOKEN = /(^|-)(pro|omni|ultra|vision|thinking|tts|image|learnlm|embedding|aqa|embed)(-|$)/i;
+const EXCLUDE_ANY = /preview|experimental/i;
+
 export function pickGeminiModel(models: string[]): string | null {
   const usable = models.filter(
-    (m) => /gemini/i.test(m) && !/embedding|aqa|vision|thinking|tts|image|learnlm/i.test(m),
+    (m) => /gemini/i.test(m) && !EXCLUDE_TOKEN.test(m) && !EXCLUDE_ANY.test(m),
   );
-  const flash = usable.filter((m) => /flash/i.test(m) && !/preview|exp|experimental/i.test(m));
+  const flash = usable.filter((m) => /(^|-)flash(-|$)/i.test(m));
   const pool = flash.length > 0 ? flash : usable;
   if (pool.length === 0) return models[0] ?? null;
   return [...pool].sort().pop() ?? pool[0];

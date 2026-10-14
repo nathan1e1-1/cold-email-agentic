@@ -4,7 +4,7 @@ import { buildSystemPrompt, buildUserPrompt } from './prompt';
 
 const HOST = 'api.groq.com';
 const MODEL = 'llama-3.3-70b-versatile';
-const RETRYABLE_STATUSES = new Set([429, 500, 502, 503]);
+const RETRYABLE_STATUSES = new Set([500, 502, 503]);
 
 interface GroqResponse {
   choices?: { message?: { content?: string } }[];

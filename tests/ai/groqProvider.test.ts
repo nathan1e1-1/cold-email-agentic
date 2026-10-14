@@ -56,6 +56,17 @@ describe('GroqProvider', () => {
     ).rejects.toThrow(/Invalid API Key/);
   });
 
+  it('does not retry a 429 rate/quota error', async () => {
+    const http = new FakeHttpClient().queueResponse({
+      status: 429,
+      body: JSON.stringify({ error: { message: 'rate limit reached' } }),
+    });
+    await expect(
+      new GroqProvider({ http, apiKey: 'K', sleep: async () => {} }).generate({ thread, ownEmail: 'me@x.com', tone: 'direct' }),
+    ).rejects.toThrow(/rate limit reached/);
+    expect(http.requests.length).toBe(1);
+  });
+
   it('advertises a groq descriptor', () => {
     expect(new GroqProvider({ http: new FakeHttpClient(), apiKey: 'K' }).descriptor).toEqual({
       id: 'groq',

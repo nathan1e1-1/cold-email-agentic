@@ -4,7 +4,7 @@ import { buildSystemPrompt, buildUserPrompt } from './prompt';
 
 const HOST = 'generativelanguage.googleapis.com';
 const MODEL = 'gemini-3.8-flash';
-const RETRYABLE_STATUSES = new Set([429, 503]);
+const RETRYABLE_STATUSES = new Set([500, 502, 503]);
 
 interface GeminiResponse {
   candidates?: { content?: { parts?: { text?: string }[] } }[];

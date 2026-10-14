@@ -91,6 +91,17 @@ describe('GeminiProvider', () => {
     expect(http.requests.length).toBe(3);
   });
 
+  it('does not retry a 429 quota error', async () => {
+    const http = new FakeHttpClient().queueResponse({
+      status: 429,
+      body: JSON.stringify({ error: { message: 'quota exceeded', status: 'RESOURCE_EXHAUSTED' } }),
+    });
+    await expect(
+      new GeminiProvider({ http, apiKey: 'K', sleep: async () => {} }).generate({ thread, ownEmail: 'me@x.com', tone: 'direct' }),
+    ).rejects.toThrow(/quota exceeded/);
+    expect(http.requests.length).toBe(1);
+  });
+
   it('does not retry a non-retryable error', async () => {
     const http = new FakeHttpClient().queueResponse({ status: 400, body: JSON.stringify({ error: { message: 'bad' } }) });
     await expect(
