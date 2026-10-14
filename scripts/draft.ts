@@ -3,6 +3,7 @@ import { execFile } from 'node:child_process';
 import { createPkce, buildAuthUrl, exchangeCode, type Authenticator } from '../src/mail/oauth';
 import type { HttpClient } from '../src/mail/httpClient';
 import { GmailProvider } from '../src/mail/gmailProvider';
+import { isJunkThread } from '../src/mail/junk';
 import { GeminiProvider } from '../src/ai/geminiProvider';
 import { GroqProvider } from '../src/ai/groqProvider';
 import { listGeminiModels, pickGeminiModel } from '../src/ai/geminiModels';
@@ -118,10 +119,18 @@ async function main(): Promise<void> {
   console.log(`Connected as ${ownEmail}\n`);
 
   const gmail = new GmailProvider({ http: nodeHttp, auth, ownEmail });
-  const { threads } = await gmail.listThreads({ sinceDays: 90, cap: limit });
-  console.log(`Fetched ${threads.length} thread(s) — tone "${tone}"\n`);
+  const fetchCap = Number(process.env.GMAIL_FETCH ?? 25);
+  const { threads } = await gmail.listThreads({ sinceDays: 90, cap: fetchCap });
 
-  for (const thread of threads.slice(0, limit)) {
+  const includeJunk = process.env.INCLUDE_JUNK === '1';
+  const eligible = includeJunk ? threads : threads.filter((thread) => !isJunkThread(thread));
+  const skipped = threads.length - eligible.length;
+  if (skipped > 0) {
+    console.log(`Skipped ${skipped} automated/no-reply thread(s). Set INCLUDE_JUNK=1 to include them.`);
+  }
+  console.log(`Drafting ${Math.min(limit, eligible.length)} of ${eligible.length} eligible thread(s) — tone "${tone}"\n`);
+
+  for (const thread of eligible.slice(0, limit)) {
     const { text, label } = await generateWithFallback(providers, { thread, ownEmail, tone });
     const last = thread.messages[thread.messages.length - 1];
     console.log('='.repeat(72));
