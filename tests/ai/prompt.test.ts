@@ -27,6 +27,12 @@ describe('prompt', () => {
     expect(s.toLowerCase()).toContain('untrusted');
   });
 
+  it('discourages clichés and placeholders', () => {
+    const s = buildSystemPrompt({ tone: 'professional' });
+    expect(s).toMatch(/clich/i);
+    expect(s).toMatch(/placeholder/i);
+  });
+
   it('builds a delimited user prompt with subject and instruction', () => {
     const u = buildUserPrompt({
       thread: thread([msg('m1', 'inbound', 'Hello there')]),

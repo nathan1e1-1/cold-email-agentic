@@ -5,6 +5,7 @@ import { TONE_PRESETS } from './domain/types'
 import type { AiProvider } from './ai/aiProvider'
 import type { MailboxProvider } from './services/mailbox'
 import { createAiProvider, createMailboxProvider, type MailboxMode } from './services/providerFactory'
+import { SettingsDialog } from './SettingsDialog'
 
 function formatDate(ts: number): string {
   return new Date(ts).toLocaleString(undefined, {
@@ -33,6 +34,7 @@ function App() {
   const [generating, setGenerating] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [showSettings, setShowSettings] = useState(false)
 
   const generate = useCallback(
     async (
@@ -77,11 +79,11 @@ function App() {
       setDraft(''); setInstruction('')
       setBusy('Connecting…')
       try {
-        const box = createMailboxProvider(nextMode)
+        const box = await createMailboxProvider(nextMode)
         const acc = await box.connect()
         let aiProvider: AiProvider | null = null
         try {
-          aiProvider = createAiProvider()
+          aiProvider = await createAiProvider()
         } catch (err) {
           setError(err instanceof Error ? err.message : String(err))
         }
@@ -131,6 +133,7 @@ function App() {
           <span className="modes">
             <button type="button" className={mode === 'mock' ? 'chip active' : 'chip'} disabled={busy !== null} onClick={() => void connect('mock')}>Mock</button>
             <button type="button" className={mode === 'gmail' ? 'chip active' : 'chip'} disabled={busy !== null} onClick={() => void connect('gmail')}>Gmail</button>
+            <button type="button" className="chip" onClick={() => setShowSettings(true)}>Settings</button>
           </span>
         </div>
       </header>
@@ -189,8 +192,13 @@ function App() {
               <div className="draft-panel">
                 <div className="draft-head">
                   <span className="draft-title">AI draft</span>
+                  {ai && (
+                    <span className={`badge privacy-${ai.descriptor.privacy}`}>
+                      {ai.descriptor.privacy === 'local' ? 'local model' : 'may use content'}
+                    </span>
+                  )}
                   {generating && <span className="hint">generating…</span>}
-                  {!ai && <span className="hint">set an AI key in .env to draft</span>}
+                  {!ai && <span className="hint">add an AI key in Settings</span>}
                 </div>
                 <div className="tones">
                   {TONE_PRESETS.map((t) => (
@@ -237,10 +245,17 @@ function App() {
               </div>
             </>
           ) : (
-            <div className="empty">{busy ?? 'Select a conversation'}</div>
+            <div className="empty">{busy ?? (account ? 'Select a conversation' : 'Click “Gmail” to connect, or “Mock” to try it out.')}</div>
           )}
         </main>
       </div>
+
+      {showSettings && (
+        <SettingsDialog
+          onClose={() => setShowSettings(false)}
+          onSaved={() => { setShowSettings(false); void connect(mode) }}
+        />
+      )}
     </div>
   )
 }

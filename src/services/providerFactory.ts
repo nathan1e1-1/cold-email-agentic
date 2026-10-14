@@ -13,11 +13,11 @@ import { MockMailboxProvider } from './mockMailbox';
 
 export type MailboxMode = 'mock' | 'gmail';
 
-export function createMailboxProvider(mode: MailboxMode): MailboxProvider {
+export async function createMailboxProvider(mode: MailboxMode): Promise<MailboxProvider> {
   if (mode === 'mock') return new MockMailboxProvider();
 
-  const cfg = appConfig();
-  if (!cfg.googleClientId) throw new Error('Set VITE_GOOGLE_CLIENT_ID in .env to connect Gmail');
+  const cfg = await appConfig();
+  if (!cfg.googleClientId) throw new Error('Add your Google Client ID in Settings (gear icon)');
 
   const http = new TauriHttpClient();
   const createProvider = (ownEmail: string) => {
@@ -37,13 +37,13 @@ export function createMailboxProvider(mode: MailboxMode): MailboxProvider {
   return new GmailMailboxAdapter(createProvider);
 }
 
-export function createAiProvider(): AiProvider {
-  const cfg = appConfig();
+export async function createAiProvider(): Promise<AiProvider> {
+  const cfg = await appConfig();
   const http = new TauriHttpClient();
   if (cfg.aiProvider === 'groq' && cfg.groqApiKey) {
     return new GroqProvider({ http, apiKey: cfg.groqApiKey });
   }
   if (cfg.geminiApiKey) return new GeminiProvider({ http, apiKey: cfg.geminiApiKey });
   if (cfg.groqApiKey) return new GroqProvider({ http, apiKey: cfg.groqApiKey });
-  throw new Error('Set VITE_GEMINI_API_KEY or VITE_GROQ_API_KEY in .env to draft replies');
+  throw new Error('Add a Gemini or Groq API key in Settings (gear icon)');
 }

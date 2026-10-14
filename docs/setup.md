@@ -69,6 +69,10 @@ appear. Click a thread and the **AI draft** appears at the bottom, with tone chi
 **Regenerate** (add a nudge like "shorter" and hit Regenerate). Click **Mock** to use the
 built-in sample inbox instead. Tokens are stored in the macOS Keychain.
 
+You can also skip the `.env` and enter everything in-app: click **Settings** (top right) and
+fill in the Google Client ID / secret and AI key — secrets go to the Keychain, the rest to
+local storage. `.env` values are used as a fallback.
+
 ## 6. Draft script (test the AI on real threads)
 
 Before wiring the UI, you can generate drafts straight from your real inbox:
