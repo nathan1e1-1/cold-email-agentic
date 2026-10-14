@@ -1,6 +1,7 @@
 import type { HttpClient } from '../mail/httpClient';
 import type { AiDescriptor, AiProvider, GenerateRequest } from './aiProvider';
 import { buildSystemPrompt, buildUserPrompt } from './prompt';
+import { cleanDraft } from './sanitize';
 
 const HOST = 'generativelanguage.googleapis.com';
 const MODEL = 'gemini-3.8-flash';
@@ -91,6 +92,6 @@ export class GeminiProvider implements AiProvider {
     }
     const text = json.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? '';
     if (!text.trim()) throw new Error('Gemini returned an empty draft');
-    return text.trim();
+    return cleanDraft(text);
   }
 }

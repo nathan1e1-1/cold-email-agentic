@@ -1,6 +1,7 @@
 import type { HttpClient } from '../mail/httpClient';
 import type { AiDescriptor, AiProvider, GenerateRequest } from './aiProvider';
 import { buildSystemPrompt, buildUserPrompt } from './prompt';
+import { cleanDraft } from './sanitize';
 
 const HOST = 'api.groq.com';
 const MODEL = 'llama-3.3-70b-versatile';
@@ -90,6 +91,6 @@ export class GroqProvider implements AiProvider {
     if (json.error) throw new Error(json.error.message ?? 'Groq error');
     const text = json.choices?.[0]?.message?.content ?? '';
     if (!text.trim()) throw new Error('Groq returned an empty draft');
-    return text.trim();
+    return cleanDraft(text);
   }
 }
