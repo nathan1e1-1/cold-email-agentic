@@ -38,6 +38,8 @@ Create a free API key at [Google AI Studio](https://aistudio.google.com/apikey).
 
 > Privacy: the **free tier** of the Gemini API may use your content to improve Google's products, and human reviewers may read it. Do not send confidential content on the free tier. For fully private drafting, use **Ollama** (local) instead — Settings has a provider toggle.
 
+**Optional second free provider — Groq.** If Gemini is overloaded (`503`) or you want a fallback, create a free key at [console.groq.com/keys](https://console.groq.com/keys) and set `GROQ_API_KEY`. The draft script tries Gemini first, then Groq automatically. (Groq does not retain inference data by default.)
+
 ## 4. Optional — Ollama (private mode)
 
 Install [Ollama](https://ollama.com), then `ollama pull llama3.1`. Select Ollama as the AI provider in Settings to keep all content on-device.
@@ -65,8 +67,11 @@ npm run draft
 It opens your browser for Google consent (loopback on `127.0.0.1:8765`), fetches your most
 recent threads, and prints an AI draft for each so you can judge the tone.
 
+Add `GROQ_API_KEY=…` to enable the Groq fallback (used automatically if Gemini fails).
+The Gemini model is chosen at runtime from the API's own model list, so it survives model
+retirements — set `GEMINI_MODEL` to force a specific one.
+
 Optional env vars: `GMAIL_LIMIT` (default `3`), `TONE` (`professional` | `friendly` |
 `concise` | `direct` | `match`, default `professional`), `OAUTH_PORT` (default `8765`),
-`GEMINI_MODEL` (default `gemini-3.8-flash` — set this if Google retires the model again;
-the error response names the current one).
+`GEMINI_MODEL`, `GROQ_API_KEY`, `GROQ_MODEL`, `AI_PROVIDER` (`gemini` | `groq`, to reorder).
 

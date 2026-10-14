@@ -13,7 +13,8 @@
       "allow": [
         { "url": "https://gmail.googleapis.com/*" },
         { "url": "https://oauth2.googleapis.com/*" },
-        { "url": "https://generativelanguage.googleapis.com/*" }
+        { "url": "https://generativelanguage.googleapis.com/*" },
+        { "url": "https://api.groq.com/*" }
       ]
     },
     "oauth:allow-start",
