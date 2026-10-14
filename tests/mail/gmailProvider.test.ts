@@ -144,4 +144,22 @@ describe('GmailProvider', () => {
     }));
     expect(await provider(http).findOwnLatestReply('t1')).toEqual({ isReply: true });
   });
+
+  it('surfaces the Gmail error reason when a call fails', async () => {
+    const http = new FakeHttpClient().onRequest(() => ({
+      status: 403,
+      body: JSON.stringify({
+        error: { code: 403, status: 'PERMISSION_DENIED', message: 'Gmail API has not been used in project 123 or it is disabled.' },
+      }),
+    }));
+    await expect(provider(http).getThread('t1')).rejects.toThrow(/Gmail API has not been used in project 123/);
+  });
+
+  it('surfaces a listThreads error instead of returning an empty inbox', async () => {
+    const http = new FakeHttpClient().onRequest(() => ({
+      status: 403,
+      body: JSON.stringify({ error: { status: 'PERMISSION_DENIED', message: 'Insufficient Permission' } }),
+    }));
+    await expect(provider(http).listThreads({ sinceDays: 90, cap: 10 })).rejects.toThrow(/Insufficient Permission/);
+  });
 });

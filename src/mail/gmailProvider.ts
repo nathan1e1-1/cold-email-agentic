@@ -16,6 +16,20 @@ interface RequestOptions {
   headers?: Record<string, string>;
 }
 
+function describeError(res: { status: number; body: string }): string {
+  try {
+    const json = JSON.parse(res.body) as { error?: { message?: string; status?: string } };
+    if (json.error?.message) return `${json.error.status ?? res.status} — ${json.error.message}`;
+  } catch {
+    /* fall through to the raw body */
+  }
+  return `HTTP ${res.status} ${res.body.slice(0, 200)}`;
+}
+
+function ensureOk(res: { status: number; body: string }, context: string): void {
+  if (res.status >= 400) throw new Error(`${context}: ${describeError(res)}`);
+}
+
 export class GmailProvider implements MailProvider {
   private http: HttpClient;
   private authenticator: Authenticator;
@@ -58,6 +72,7 @@ export class GmailProvider implements MailProvider {
 
   async getProfile(): Promise<GmailProfile> {
     const res = await this.request('GET', '/profile');
+    ensureOk(res, 'Gmail getProfile');
     const json = JSON.parse(res.body) as { emailAddress?: string; historyId?: string };
     return { emailAddress: json.emailAddress ?? '', historyId: json.historyId ?? '0' };
   }
@@ -67,6 +82,7 @@ export class GmailProvider implements MailProvider {
       [`in:inbox newer_than:${opts.sinceDays}d`, opts.query].filter(Boolean).join(' '),
     );
     const res = await this.request('GET', `/threads?q=${q}&maxResults=${opts.cap}`);
+    ensureOk(res, 'Gmail listThreads');
     const json = JSON.parse(res.body) as { threads?: { id: string }[] };
     const ids = (json.threads ?? []).map((t) => t.id);
     const threads = await mapWithConcurrency(ids, this.concurrency, (id) => this.getThread(id));
@@ -76,7 +92,7 @@ export class GmailProvider implements MailProvider {
 
   async getThread(id: string): Promise<Thread> {
     const res = await this.request('GET', `/threads/${id}?format=full`);
-    if (res.status >= 400) throw new Error(`Gmail getThread failed: ${res.status}`);
+    ensureOk(res, `Gmail getThread ${id}`);
     return parseThread(JSON.parse(res.body) as GmailThreadResource, this.ownEmail);
   }
 
@@ -92,7 +108,7 @@ export class GmailProvider implements MailProvider {
     if (res.status === 404) {
       return { changedThreadIds: [], deletedThreadIds: [], nextHistoryId: opts.historyId, expired: true };
     }
-    if (res.status >= 400) throw new Error(`Gmail history failed: ${res.status}`);
+    ensureOk(res, 'Gmail history');
     const json = JSON.parse(res.body) as {
       historyId?: string;
       history?: {
@@ -131,7 +147,7 @@ export class GmailProvider implements MailProvider {
       body: JSON.stringify({ raw, ...(input.threadId ? { threadId: input.threadId } : {}) }),
       headers: { 'Content-Type': 'application/json' },
     });
-    if (res.status >= 400) throw new Error(`Gmail send failed: ${res.status} ${res.body}`);
+    ensureOk(res, 'Gmail send');
     const json = JSON.parse(res.body) as { id?: string; threadId?: string };
     return { messageId: json.id ?? '', threadId: json.threadId ?? input.threadId ?? '' };
   }
