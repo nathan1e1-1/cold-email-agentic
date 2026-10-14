@@ -1,16 +1,15 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import './App.css'
-import type { Account, Thread } from './domain/types'
-import { MockMailboxProvider } from './services/mockMailbox'
-
-const provider = new MockMailboxProvider()
+import type { Account, Thread, TonePreset } from './domain/types'
+import { TONE_PRESETS } from './domain/types'
+import type { AiProvider } from './ai/aiProvider'
+import type { MailboxProvider } from './services/mailbox'
+import { createAiProvider, createMailboxProvider, type MailboxMode } from './services/providerFactory'
+import { SettingsDialog } from './SettingsDialog'
 
 function formatDate(ts: number): string {
   return new Date(ts).toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
+    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
   })
 }
 
@@ -21,59 +20,101 @@ function lastSender(thread: Thread): string {
 }
 
 function App() {
+  const [mode, setMode] = useState<MailboxMode>('mock')
+  const [mailbox, setMailbox] = useState<MailboxProvider | null>(null)
+  const [ai, setAi] = useState<AiProvider | null>(null)
   const [account, setAccount] = useState<Account | null>(null)
   const [threads, setThreads] = useState<Thread[]>([])
+  const [busy, setBusy] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [selected, setSelected] = useState<Thread | null>(null)
-  const [reply, setReply] = useState('')
+  const [draft, setDraft] = useState('')
+  const [tone, setTone] = useState<TonePreset>('professional')
+  const [instruction, setInstruction] = useState('')
+  const [generating, setGenerating] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [showSettings, setShowSettings] = useState(false)
 
-  const loadThreads = useCallback(async () => {
-    const list = await provider.listThreads()
-    setThreads(list)
-    return list
-  }, [])
-
-  const openThread = useCallback(async (id: string) => {
-    setSelectedId(id)
-    setReply('')
-    setStatus(null)
-    setSelected(await provider.getThread(id))
-  }, [])
-
-  useEffect(() => {
-    let active = true
-    void (async () => {
+  const generate = useCallback(
+    async (
+      aiProvider: AiProvider,
+      acc: Account,
+      thread: Thread,
+      nextTone: TonePreset,
+      opts: { instruction?: string; priorDraft?: string } = {},
+    ) => {
+      setGenerating(true); setError(null); setStatus(null)
       try {
-        const acc = await provider.connect()
-        if (!active) return
-        setAccount(acc)
-        const list = await loadThreads()
-        if (active && list.length > 0) await openThread(list[0].id)
-      } catch (e) {
-        if (active) setError(e instanceof Error ? e.message : String(e))
+        setDraft(await aiProvider.generate({
+          thread,
+          ownEmail: acc.ownEmail,
+          tone: nextTone,
+          instruction: opts.instruction,
+          priorDraft: opts.priorDraft,
+        }))
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err))
+      } finally {
+        setGenerating(false)
       }
-    })()
-    return () => {
-      active = false
-    }
-  }, [loadThreads, openThread])
+    },
+    [],
+  )
+
+  const openThread = useCallback(
+    async (box: MailboxProvider, id: string, aiProvider: AiProvider | null, acc: Account) => {
+      setSelectedId(id); setStatus(null); setDraft(''); setInstruction('')
+      const thread = await box.getThread(id)
+      setSelected(thread)
+      if (thread && aiProvider) void generate(aiProvider, acc, thread, tone, {})
+    },
+    [generate, tone],
+  )
+
+  const connect = useCallback(
+    async (nextMode: MailboxMode) => {
+      setMode(nextMode)
+      setError(null); setStatus(null); setThreads([]); setSelected(null); setSelectedId(null)
+      setDraft(''); setInstruction('')
+      setBusy('Connecting…')
+      try {
+        const box = await createMailboxProvider(nextMode)
+        const acc = await box.connect()
+        let aiProvider: AiProvider | null = null
+        try {
+          aiProvider = await createAiProvider()
+        } catch (err) {
+          setError(err instanceof Error ? err.message : String(err))
+        }
+        setMailbox(box); setAi(aiProvider); setAccount(acc)
+        setBusy('Loading threads…')
+        const list = await box.listThreads()
+        setThreads(list)
+        setBusy(null)
+        if (list.length > 0) await openThread(box, list[0].id, aiProvider, acc)
+      } catch (err) {
+        setBusy(null)
+        setError(err instanceof Error ? err.message : String(err))
+      }
+    },
+    [openThread],
+  )
 
   const onSend = useCallback(async () => {
-    if (!selected || reply.trim() === '') return
+    if (!mailbox || !selected || draft.trim() === '') return
     setError(null)
     try {
-      const sent = await provider.send(selected.id, reply.trim())
-      await loadThreads()
-      await openThread(selected.id)
-      setStatus(`Sent to ${sent.to.map((a) => a.email).join(', ')} (simulated)`)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      const sent = await mailbox.send(selected.id, draft.trim())
+      setStatus(`Sent to ${sent.to.map((a) => a.email).join(', ')}`)
+      setThreads(await mailbox.listThreads())
+      setSelected(await mailbox.getThread(selected.id))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
     }
-  }, [selected, reply, loadThreads, openThread])
+  }, [mailbox, selected, draft])
 
-  const canSend = selected !== null && reply.trim() !== ''
+  const canSend = mailbox !== null && selected !== null && draft.trim() !== ''
 
   return (
     <div className="app">
@@ -83,18 +124,23 @@ function App() {
           {account ? (
             <>
               <span className="dot" aria-hidden="true" />
-              <span>
-                {account.displayName} &lt;{account.email}&gt;
-              </span>
-              <span className="badge">mock inbox</span>
+              <span>{account.displayName} &lt;{account.email}&gt;</span>
+              <span className="badge">{mode === 'mock' ? 'mock inbox' : 'gmail'}</span>
             </>
           ) : (
-            <span>Connecting…</span>
+            <span>Not connected</span>
           )}
+          <span className="modes">
+            <button type="button" className={mode === 'mock' ? 'chip active' : 'chip'} disabled={busy !== null} onClick={() => void connect('mock')}>Mock</button>
+            <button type="button" className={mode === 'gmail' ? 'chip active' : 'chip'} disabled={busy !== null} onClick={() => void connect('gmail')}>Gmail</button>
+            <button type="button" className="chip" onClick={() => setShowSettings(true)}>Settings</button>
+          </span>
         </div>
       </header>
 
+      {busy && <div className="banner">{busy}</div>}
       {error && <div className="banner error">{error}</div>}
+      {status && <div className="banner ok">{status}</div>}
 
       <div className="workspace">
         <aside className="list">
@@ -107,7 +153,7 @@ function App() {
                 <button
                   type="button"
                   className={t.id === selectedId ? 'thread selected' : 'thread'}
-                  onClick={() => void openThread(t.id)}
+                  onClick={() => { if (mailbox && account) void openThread(mailbox, t.id, ai, account) }}
                 >
                   <span className="thread-top">
                     <span className="thread-sender">{lastSender(t)}</span>
@@ -135,9 +181,7 @@ function App() {
                 {selected.messages.map((m) => (
                   <li key={m.id} className={`message ${m.direction}`}>
                     <div className="message-meta">
-                      <span className="message-from">
-                        {m.direction === 'outbound' ? 'You' : m.from.name ?? m.from.email}
-                      </span>
+                      <span className="message-from">{m.direction === 'outbound' ? 'You' : m.from.name ?? m.from.email}</span>
                       <span className="message-date">{formatDate(m.date)}</span>
                     </div>
                     <div className="message-body">{m.bodyText}</div>
@@ -145,27 +189,73 @@ function App() {
                 ))}
               </ol>
 
-              <div className="reply">
-                {status && <div className="banner ok">{status}</div>}
+              <div className="draft-panel">
+                <div className="draft-head">
+                  <span className="draft-title">AI draft</span>
+                  {ai && (
+                    <span className={`badge privacy-${ai.descriptor.privacy}`}>
+                      {ai.descriptor.privacy === 'local' ? 'local model' : 'may use content'}
+                    </span>
+                  )}
+                  {generating && <span className="hint">generating…</span>}
+                  {!ai && <span className="hint">add an AI key in Settings</span>}
+                </div>
+                <div className="tones">
+                  {TONE_PRESETS.map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      className={t === tone ? 'tone active' : 'tone'}
+                      disabled={generating}
+                      onClick={() => { setTone(t); if (selected && ai && account) void generate(ai, account, selected, t, {}) }}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
                 <textarea
-                  value={reply}
-                  onChange={(e) => setReply(e.target.value)}
-                  placeholder="Write a reply…"
-                  rows={4}
+                  className="draft-text"
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  placeholder="The agent's draft appears here…"
+                  rows={5}
                 />
-                <div className="reply-actions">
-                  <span className="hint">Simulated send — no real email leaves the app yet.</span>
-                  <button type="button" className="send" disabled={!canSend} onClick={() => void onSend()}>
+                <div className="draft-controls">
+                  <input
+                    className="instruction"
+                    value={instruction}
+                    onChange={(e) => setInstruction(e.target.value)}
+                    placeholder="Nudge: shorter, warmer, ask about timing…"
+                  />
+                  <button
+                    type="button"
+                    className="regen"
+                    disabled={generating || !ai}
+                    onClick={() => { if (selected && ai && account) void generate(ai, account, selected, tone, { instruction: instruction || undefined, priorDraft: draft || undefined }) }}
+                  >
+                    Regenerate
+                  </button>
+                  <button type="button" className="send" disabled={!canSend || generating} onClick={() => void onSend()}>
                     Send
                   </button>
                 </div>
+                <span className="hint">
+                  {mode === 'gmail' ? 'Sends a real reply from your Gmail account.' : 'Simulated send (mock inbox).'}
+                </span>
               </div>
             </>
           ) : (
-            <div className="empty">Select a conversation</div>
+            <div className="empty">{busy ?? (account ? 'Select a conversation' : 'Click “Gmail” to connect, or “Mock” to try it out.')}</div>
           )}
         </main>
       </div>
+
+      {showSettings && (
+        <SettingsDialog
+          onClose={() => setShowSettings(false)}
+          onSaved={() => { setShowSettings(false); void connect(mode) }}
+        />
+      )}
     </div>
   )
 }

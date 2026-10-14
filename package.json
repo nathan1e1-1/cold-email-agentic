@@ -11,9 +11,14 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc -b",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "draft": "tsx scripts/draft.ts"
   },
   "dependencies": {
+    "@fabianlars/tauri-plugin-oauth": "^2.1.0",
+    "@tauri-apps/api": "^2.12.3",
+    "@tauri-apps/plugin-http": "^2.8.2",
+    "@tauri-apps/plugin-opener": "^2.7.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },
@@ -24,6 +29,7 @@
     "@types/react-dom": "^19.2.7",
     "@vitejs/plugin-react": "^6.1.1",
     "oxlint": "^1.81.0",
+    "tsx": "^4.23.15",
     "typescript": "~6.0.2",
     "vite": "^8.3.0",
     "vitest": "^5.0.4"

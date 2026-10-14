@@ -168,5 +168,6 @@ export function parseThread(res: GmailThreadResource, ownEmail: string): Thread 
     snippet: res.snippet ?? '',
     inInbox: labels.includes('INBOX'),
     labels,
+    historyId: res.historyId,
   };
 }

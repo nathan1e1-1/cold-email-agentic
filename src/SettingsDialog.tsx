@@ -1,0 +1,94 @@
+import { useState } from 'react'
+import { loadSettings, saveSettings, SECRET_KEYS, type StoredSettings } from './services/appSettings'
+import { setSecret } from './services/secrets'
+
+interface Props {
+  onClose: () => void
+  onSaved: () => void
+}
+
+export function SettingsDialog({ onClose, onSaved }: Props) {
+  const [settings, setSettings] = useState<StoredSettings>(loadSettings())
+  const [clientSecret, setClientSecret] = useState('')
+  const [geminiKey, setGeminiKey] = useState('')
+  const [groqKey, setGroqKey] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const save = async () => {
+    setSaving(true)
+    setError(null)
+    try {
+      saveSettings(settings)
+      if (clientSecret) await setSecret(SECRET_KEYS.googleClientSecret, clientSecret)
+      if (geminiKey) await setSecret(SECRET_KEYS.geminiApiKey, geminiKey)
+      if (groqKey) await setSecret(SECRET_KEYS.groqApiKey, groqKey)
+      onSaved()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <span className="modal-title">Settings</span>
+          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close">×</button>
+        </div>
+
+        <label className="field">
+          <span>Google Client ID</span>
+          <input
+            value={settings.googleClientId}
+            onChange={(e) => setSettings({ ...settings, googleClientId: e.target.value })}
+            placeholder="1234-abc.apps.googleusercontent.com"
+          />
+        </label>
+
+        <label className="field">
+          <span>Google Client Secret <em>· Keychain, leave blank to keep</em></span>
+          <input type="password" value={clientSecret} onChange={(e) => setClientSecret(e.target.value)} placeholder="GOCSPX-…" />
+        </label>
+
+        <label className="field">
+          <span>OAuth redirect URI</span>
+          <input value={settings.redirectUri} onChange={(e) => setSettings({ ...settings, redirectUri: e.target.value })} />
+        </label>
+
+        <label className="field">
+          <span>AI provider</span>
+          <select
+            value={settings.aiProvider}
+            onChange={(e) => setSettings({ ...settings, aiProvider: e.target.value === 'groq' ? 'groq' : 'gemini' })}
+          >
+            <option value="gemini">Gemini (free tier)</option>
+            <option value="groq">Groq (free)</option>
+          </select>
+        </label>
+
+        <label className="field">
+          <span>Gemini API key <em>· Keychain, leave blank to keep</em></span>
+          <input type="password" value={geminiKey} onChange={(e) => setGeminiKey(e.target.value)} placeholder="AIza…" />
+        </label>
+
+        <label className="field">
+          <span>Groq API key <em>· Keychain, optional</em></span>
+          <input type="password" value={groqKey} onChange={(e) => setGroqKey(e.target.value)} placeholder="gsk_…" />
+        </label>
+
+        <p className="hint">Secrets are stored in the macOS Keychain, never in the repo. Reconnect after saving.</p>
+        {error && <div className="banner error">{error}</div>}
+
+        <div className="modal-actions">
+          <button type="button" className="regen" onClick={onClose}>Cancel</button>
+          <button type="button" className="send" disabled={saving} onClick={() => void save()}>
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}

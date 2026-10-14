@@ -10,6 +10,7 @@ export interface RepoAccount extends Account {
 export interface RepoThread extends Thread {
   rowId: number;
   accountId: number;
+  historyId: string | null;
 }
 
 export interface Repository {
