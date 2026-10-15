@@ -5,7 +5,7 @@ import { cleanDraft } from './sanitize';
 import { MAX_RETRY_WAIT_MS, parseRetryDelayMs } from './retry';
 
 const HOST = 'api.groq.com';
-const MODEL = 'llama-3.3-70b-versatile';
+const MODEL = 'openai/gpt-oss-120b';
 
 interface GroqResponse {
   choices?: { message?: { content?: string } }[];

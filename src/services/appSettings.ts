@@ -15,7 +15,7 @@ const STORAGE_KEY = 'coldemailagentic.settings';
 const DEFAULTS: StoredSettings = {
   googleClientId: '',
   redirectUri: 'http://127.0.0.1:8765',
-  aiProvider: 'gemini',
+  aiProvider: 'groq',
 };
 
 export function loadSettings(): StoredSettings {

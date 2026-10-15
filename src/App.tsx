@@ -49,15 +49,10 @@ function App() {
     [],
   )
 
-  const openThread = useCallback(
-    async (box: MailboxProvider, id: string, aiProvider: AiProvider | null, acc: Account) => {
-      setSelectedId(id); setStatus(null); setDraft(''); setInstruction('')
-      const thread = await box.getThread(id)
-      setSelected(thread)
-      if (thread && aiProvider) void generate(aiProvider, acc, thread, tone, {})
-    },
-    [generate, tone],
-  )
+  const openThread = useCallback(async (box: MailboxProvider, id: string) => {
+    setSelectedId(id); setStatus(null); setDraft(''); setInstruction('')
+    setSelected(await box.getThread(id))
+  }, [])
 
   const connect = useCallback(
     async (nextMode: MailboxMode) => {
@@ -79,7 +74,7 @@ function App() {
         const list = await box.listThreads()
         setThreads(list)
         setBusy(null)
-        if (list.length > 0) await openThread(box, list[0].id, aiProvider, acc)
+        if (list.length > 0) await openThread(box, list[0].id)
       } catch (err) {
         setBusy(null)
         setError(err instanceof Error ? err.message : String(err))
@@ -101,15 +96,9 @@ function App() {
     }
   }, [mailbox, selected, draft])
 
-  const handleTone = useCallback(
-    (next: TonePreset) => {
-      setTone(next)
-      if (selected && ai && account) void generate(ai, account, selected, next, {})
-    },
-    [selected, ai, account, generate],
-  )
+  const handleTone = useCallback((next: TonePreset) => setTone(next), [])
 
-  const handleRegenerate = useCallback(() => {
+  const handleGenerate = useCallback(() => {
     if (selected && ai && account) {
       void generate(ai, account, selected, tone, {
         instruction: instruction || undefined,
@@ -151,7 +140,7 @@ function App() {
         <ThreadList
           threads={threads}
           selectedId={selectedId}
-          onSelect={(id) => { if (mailbox && account) void openThread(mailbox, id, ai, account) }}
+          onSelect={(id) => { if (mailbox) void openThread(mailbox, id) }}
         />
 
         <main className="reader">
@@ -168,7 +157,7 @@ function App() {
                 onToneChange={handleTone}
                 instruction={instruction}
                 onInstructionChange={setInstruction}
-                onRegenerate={handleRegenerate}
+                onGenerate={handleGenerate}
                 onSend={() => void onSend()}
                 canSend={canSend}
               />

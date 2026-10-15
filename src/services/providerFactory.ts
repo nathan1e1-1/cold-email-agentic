@@ -40,10 +40,13 @@ export async function createMailboxProvider(mode: MailboxMode): Promise<MailboxP
 export async function createAiProvider(): Promise<AiProvider> {
   const cfg = await appConfig();
   const http = new TauriHttpClient();
+  if (cfg.aiProvider === 'gemini' && cfg.geminiApiKey) {
+    return new GeminiProvider({ http, apiKey: cfg.geminiApiKey });
+  }
   if (cfg.aiProvider === 'groq' && cfg.groqApiKey) {
     return new GroqProvider({ http, apiKey: cfg.groqApiKey });
   }
-  if (cfg.geminiApiKey) return new GeminiProvider({ http, apiKey: cfg.geminiApiKey });
   if (cfg.groqApiKey) return new GroqProvider({ http, apiKey: cfg.groqApiKey });
+  if (cfg.geminiApiKey) return new GeminiProvider({ http, apiKey: cfg.geminiApiKey });
   throw new Error('Add a Gemini or Groq API key in Settings (gear icon)');
 }

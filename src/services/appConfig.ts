@@ -24,7 +24,7 @@ export async function appConfig(): Promise<AppConfig> {
     googleClientId: stored.googleClientId || env.VITE_GOOGLE_CLIENT_ID || '',
     googleClientSecret: clientSecret || env.VITE_GOOGLE_CLIENT_SECRET || undefined,
     redirectUri: stored.redirectUri || env.VITE_OAUTH_REDIRECT_URI || 'http://127.0.0.1:8765',
-    aiProvider: stored.aiProvider ?? (env.VITE_AI_PROVIDER === 'groq' ? 'groq' : 'gemini'),
+    aiProvider: stored.aiProvider ?? (env.VITE_AI_PROVIDER === 'gemini' ? 'gemini' : 'groq'),
     geminiApiKey: geminiKey || env.VITE_GEMINI_API_KEY || '',
     groqApiKey: groqKey || env.VITE_GROQ_API_KEY || '',
   };

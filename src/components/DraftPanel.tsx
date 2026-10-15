@@ -12,14 +12,14 @@ interface Props {
   onToneChange: (tone: TonePreset) => void
   instruction: string
   onInstructionChange: (value: string) => void
-  onRegenerate: () => void
+  onGenerate: () => void
   onSend: () => void
   canSend: boolean
 }
 
 export function DraftPanel({
   ai, mode, generating, draft, onDraftChange, tone, onToneChange,
-  instruction, onInstructionChange, onRegenerate, onSend, canSend,
+  instruction, onInstructionChange, onGenerate, onSend, canSend,
 }: Props) {
   return (
     <div className="draft-panel">
@@ -63,8 +63,8 @@ export function DraftPanel({
           onChange={(e) => onInstructionChange(e.target.value)}
           placeholder="Nudge: shorter, warmer, ask about timing…"
         />
-        <button type="button" className="regen" disabled={generating || !ai} onClick={onRegenerate}>
-          Regenerate
+        <button type="button" className="regen" disabled={generating || !ai} onClick={onGenerate}>
+          Generate
         </button>
         <button type="button" className="send" disabled={!canSend || generating} onClick={onSend}>
           Send

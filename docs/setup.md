@@ -52,9 +52,9 @@ Create a `.env` in the project root (copy `.env.example`) and fill it in:
 VITE_GOOGLE_CLIENT_ID=your-desktop-client-id
 VITE_GOOGLE_CLIENT_SECRET=your-client-secret
 VITE_OAUTH_REDIRECT_URI=http://127.0.0.1:8765
-VITE_AI_PROVIDER=gemini
-VITE_GEMINI_API_KEY=your-gemini-key
-VITE_GROQ_API_KEY=your-groq-key   # optional fallback
+VITE_AI_PROVIDER=groq
+VITE_GROQ_API_KEY=your-groq-key
+VITE_GEMINI_API_KEY=your-gemini-key   # optional fallback
 ```
 
 Then:
