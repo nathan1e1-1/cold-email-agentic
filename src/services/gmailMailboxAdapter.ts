@@ -15,7 +15,7 @@ export class GmailMailboxAdapter implements MailboxProvider {
 
   async connect(): Promise<Account> {
     const bootstrap = this.createProvider('');
-    await bootstrap.auth();
+    if (!(await bootstrap.isAuthed())) await bootstrap.auth();
     const profile = await bootstrap.getProfile();
     this.provider = this.createProvider(profile.emailAddress);
     this.account = {

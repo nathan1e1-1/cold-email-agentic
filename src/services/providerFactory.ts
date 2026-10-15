@@ -9,13 +9,8 @@ import { appConfig } from './appConfig';
 import { GmailMailboxAdapter } from './gmailMailboxAdapter';
 import { keychainSecretStore } from './keychainSecretStore';
 import type { MailboxProvider } from './mailbox';
-import { MockMailboxProvider } from './mockMailbox';
 
-export type MailboxMode = 'mock' | 'gmail';
-
-export async function createMailboxProvider(mode: MailboxMode): Promise<MailboxProvider> {
-  if (mode === 'mock') return new MockMailboxProvider();
-
+export async function createMailboxProvider(): Promise<MailboxProvider> {
   const cfg = await appConfig();
   if (!cfg.googleClientId) throw new Error('Add your Google Client ID in Settings (gear icon)');
 

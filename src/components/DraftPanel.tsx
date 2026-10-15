@@ -4,7 +4,6 @@ import { TONE_PRESETS } from '../domain/types'
 
 interface Props {
   ai: AiProvider | null
-  mode: 'mock' | 'gmail'
   generating: boolean
   draft: string
   onDraftChange: (value: string) => void
@@ -18,7 +17,7 @@ interface Props {
 }
 
 export function DraftPanel({
-  ai, mode, generating, draft, onDraftChange, tone, onToneChange,
+  ai, generating, draft, onDraftChange, tone, onToneChange,
   instruction, onInstructionChange, onGenerate, onSend, canSend,
 }: Props) {
   return (
@@ -71,9 +70,7 @@ export function DraftPanel({
         </button>
       </div>
 
-      <span className="hint">
-        {mode === 'gmail' ? 'Sends a real reply from your Gmail account.' : 'Simulated send (mock inbox).'}
-      </span>
+      <span className="hint">Sends a real reply from your Gmail account.</span>
     </div>
   )
 }

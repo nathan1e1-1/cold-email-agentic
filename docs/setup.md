@@ -64,10 +64,10 @@ npm install
 npm run tauri dev
 ```
 
-In the app, click **Gmail** (top right) → your browser opens for consent → your inbox threads
-appear. Click a thread and the **AI draft** appears at the bottom, with tone chips and
-**Regenerate** (add a nudge like "shorter" and hit Regenerate). Click **Mock** to use the
-built-in sample inbox instead. Tokens are stored in the macOS Keychain.
+The app connects to Gmail on launch (your browser opens for consent the first time) and your
+inbox threads appear. Click a thread, then click **Generate** to draft a reply — pick a tone
+and add a nudge like "shorter", then **Generate** again to revise. Tokens are stored in the
+macOS Keychain.
 
 You can also skip the `.env` and enter everything in-app: click **Settings** (top right) and
 fill in the Google Client ID / secret and AI key — secrets go to the Keychain, the rest to

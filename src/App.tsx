@@ -1,16 +1,15 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import './App.css'
 import type { Account, Thread, TonePreset } from './domain/types'
 import type { AiProvider } from './ai/aiProvider'
 import type { MailboxProvider } from './services/mailbox'
-import { createAiProvider, createMailboxProvider, type MailboxMode } from './services/providerFactory'
+import { createAiProvider, createMailboxProvider } from './services/providerFactory'
 import { SettingsDialog } from './SettingsDialog'
 import { ThreadList } from './components/ThreadList'
 import { ReaderPane } from './components/ReaderPane'
 import { DraftPanel } from './components/DraftPanel'
 
 function App() {
-  const [mode, setMode] = useState<MailboxMode>('mock')
   const [mailbox, setMailbox] = useState<MailboxProvider | null>(null)
   const [ai, setAi] = useState<AiProvider | null>(null)
   const [account, setAccount] = useState<Account | null>(null)
@@ -25,6 +24,7 @@ function App() {
   const [status, setStatus] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [showSettings, setShowSettings] = useState(false)
+  const startedRef = useRef(false)
 
   const generate = useCallback(
     async (
@@ -54,34 +54,36 @@ function App() {
     setSelected(await box.getThread(id))
   }, [])
 
-  const connect = useCallback(
-    async (nextMode: MailboxMode) => {
-      setMode(nextMode)
-      setError(null); setStatus(null); setThreads([]); setSelected(null); setSelectedId(null)
-      setDraft(''); setInstruction('')
-      setBusy('Connecting…')
+  const connect = useCallback(async () => {
+    setError(null); setStatus(null); setThreads([]); setSelected(null); setSelectedId(null)
+    setDraft(''); setInstruction('')
+    setBusy('Connecting to Gmail…')
+    try {
+      const box = await createMailboxProvider()
+      const acc = await box.connect()
+      let aiProvider: AiProvider | null = null
       try {
-        const box = await createMailboxProvider(nextMode)
-        const acc = await box.connect()
-        let aiProvider: AiProvider | null = null
-        try {
-          aiProvider = await createAiProvider()
-        } catch (err) {
-          setError(err instanceof Error ? err.message : String(err))
-        }
-        setMailbox(box); setAi(aiProvider); setAccount(acc)
-        setBusy('Loading threads…')
-        const list = await box.listThreads()
-        setThreads(list)
-        setBusy(null)
-        if (list.length > 0) await openThread(box, list[0].id)
+        aiProvider = await createAiProvider()
       } catch (err) {
-        setBusy(null)
         setError(err instanceof Error ? err.message : String(err))
       }
-    },
-    [openThread],
-  )
+      setMailbox(box); setAi(aiProvider); setAccount(acc)
+      setBusy('Loading threads…')
+      const list = await box.listThreads()
+      setThreads(list)
+      setBusy(null)
+      if (list.length > 0) await openThread(box, list[0].id)
+    } catch (err) {
+      setBusy(null)
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }, [openThread])
+
+  useEffect(() => {
+    if (startedRef.current) return
+    startedRef.current = true
+    void connect()
+  }, [connect])
 
   const onSend = useCallback(async () => {
     if (!mailbox || !selected || draft.trim() === '') return
@@ -95,8 +97,6 @@ function App() {
       setError(err instanceof Error ? err.message : String(err))
     }
   }, [mailbox, selected, draft])
-
-  const handleTone = useCallback((next: TonePreset) => setTone(next), [])
 
   const handleGenerate = useCallback(() => {
     if (selected && ai && account) {
@@ -124,10 +124,9 @@ function App() {
               <span>Not connected</span>
             )}
           </span>
-          <span className="modes" role="group" aria-label="Inbox source">
-            <button type="button" className={mode === 'mock' ? 'chip active' : 'chip'} disabled={busy !== null} onClick={() => void connect('mock')}>Mock</button>
-            <button type="button" className={mode === 'gmail' ? 'chip active' : 'chip'} disabled={busy !== null} onClick={() => void connect('gmail')}>Gmail</button>
-          </span>
+          <button type="button" className="chip ghost" disabled={busy !== null} onClick={() => void connect()}>
+            {account ? 'Refresh' : 'Connect Gmail'}
+          </button>
           <button type="button" className="chip ghost" onClick={() => setShowSettings(true)}>Settings</button>
         </div>
       </header>
@@ -149,12 +148,11 @@ function App() {
               <ReaderPane thread={selected} />
               <DraftPanel
                 ai={ai}
-                mode={mode}
                 generating={generating}
                 draft={draft}
                 onDraftChange={setDraft}
                 tone={tone}
-                onToneChange={handleTone}
+                onToneChange={setTone}
                 instruction={instruction}
                 onInstructionChange={setInstruction}
                 onGenerate={handleGenerate}
@@ -164,7 +162,7 @@ function App() {
             </>
           ) : (
             <div className="empty">
-              {busy ?? (account ? 'Select a conversation' : 'Click “Gmail” to connect, or “Mock” to try it out.')}
+              {busy ?? (account ? 'Select a conversation' : 'Connect Gmail to load your inbox.')}
             </div>
           )}
         </main>
@@ -173,7 +171,7 @@ function App() {
       {showSettings && (
         <SettingsDialog
           onClose={() => setShowSettings(false)}
-          onSaved={() => { setShowSettings(false); void connect(mode) }}
+          onSaved={() => { setShowSettings(false); void connect() }}
         />
       )}
     </div>
