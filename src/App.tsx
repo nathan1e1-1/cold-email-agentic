@@ -159,6 +159,20 @@ function App() {
     return `SYSTEM\n${system}\n\nUSER\n${user}`
   }, [selected, tone, instruction])
 
+  const recipient = useMemo(() => {
+    if (!selected) return ''
+    const lastInbound = [...selected.messages].reverse().find((m) => m.direction === 'inbound')
+    const addr = lastInbound?.from
+      ?? selected.participants.find((p) => p.email.toLowerCase() !== (account?.ownEmail ?? '').toLowerCase())
+    if (!addr) return ''
+    return addr.name ? `${addr.name} <${addr.email}>` : addr.email
+  }, [selected, account])
+
+  const replySubject = useMemo(
+    () => (selected ? (selected.subject.startsWith('Re:') ? selected.subject : `Re: ${selected.subject}`) : ''),
+    [selected],
+  )
+
   const sentThisSession = useMemo(() => activity.filter((a) => a.kind === 'sent').length, [activity])
   const canSend = mailbox !== null && selected !== null && draft.trim() !== ''
 
@@ -232,6 +246,8 @@ function App() {
                       canSend={canSend}
                       testMode={testMode}
                       promptText={promptText}
+                      to={recipient}
+                      subject={replySubject}
                     />
                   </>
                 ) : (
