@@ -14,8 +14,19 @@ import { DraftPanel } from './components/DraftPanel'
 
 const VIEW_TITLE: Record<View, string> = { dashboard: 'Dashboard', inbox: 'Inbox', settings: 'Settings' }
 
+const COLLAPSE_KEY = 'coldemailagentic.sidebarCollapsed'
+
+function loadCollapsed(): boolean {
+  try {
+    return localStorage.getItem(COLLAPSE_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
 function App() {
   const [view, setView] = useState<View>('inbox')
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(loadCollapsed)
   const [mailbox, setMailbox] = useState<MailboxProvider | null>(null)
   const [ai, setAi] = useState<AiProvider | null>(null)
   const [account, setAccount] = useState<Account | null>(null)
@@ -38,6 +49,18 @@ function App() {
   const pushActivity = useCallback((item: Omit<ActivityItem, 'id'>) => {
     activityIdRef.current += 1
     setActivity((prev) => [{ id: activityIdRef.current, ...item }, ...prev].slice(0, 50))
+  }, [])
+
+  const toggleSidebar = useCallback(() => {
+    setSidebarCollapsed((v) => {
+      const next = !v
+      try {
+        localStorage.setItem(COLLAPSE_KEY, next ? '1' : '0')
+      } catch {
+        /* ignore storage failures */
+      }
+      return next
+    })
   }, [])
 
   const generate = useCallback(
@@ -149,6 +172,8 @@ function App() {
         onOpenThread={openThreadById}
         busy={busy}
         onConnect={() => void connect()}
+        collapsed={sidebarCollapsed}
+        onToggle={toggleSidebar}
       />
 
       <div className="main">

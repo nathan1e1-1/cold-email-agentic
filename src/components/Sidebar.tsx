@@ -51,6 +51,24 @@ function NavIcon({ name }: { name: View }) {
   )
 }
 
+function Chevron({ collapsed }: { collapsed: boolean }) {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {collapsed ? <polyline points="9 6 15 12 9 18" /> : <polyline points="15 6 9 12 15 18" />}
+    </svg>
+  )
+}
+
 const NAV: { id: View; label: string }[] = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'inbox', label: 'Inbox' },
@@ -65,12 +83,28 @@ interface Props {
   onOpenThread: (threadId: string) => void
   busy: string | null
   onConnect: () => void
+  collapsed: boolean
+  onToggle: () => void
 }
 
-export function Sidebar({ view, onNavigate, account, activity, onOpenThread, busy, onConnect }: Props) {
+export function Sidebar({
+  view, onNavigate, account, activity, onOpenThread, busy, onConnect, collapsed, onToggle,
+}: Props) {
   return (
-    <aside className="sidebar">
-      <div className="sidebar-brand">ColdEmailAgentic</div>
+    <aside className={collapsed ? 'sidebar collapsed' : 'sidebar'}>
+      <div className="sidebar-head">
+        {!collapsed && <div className="sidebar-brand">ColdEmailAgentic</div>}
+        <button
+          type="button"
+          className="collapse-btn"
+          onClick={onToggle}
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          aria-expanded={!collapsed}
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          <Chevron collapsed={collapsed} />
+        </button>
+      </div>
 
       <nav className="nav" aria-label="Primary">
         {NAV.map((item) => (
@@ -79,46 +113,52 @@ export function Sidebar({ view, onNavigate, account, activity, onOpenThread, bus
             type="button"
             className={view === item.id ? 'nav-item active' : 'nav-item'}
             aria-current={view === item.id ? 'page' : undefined}
+            aria-label={item.label}
+            title={collapsed ? item.label : undefined}
             onClick={() => onNavigate(item.id)}
           >
             <NavIcon name={item.id} />
-            {item.label}
+            {!collapsed && item.label}
           </button>
         ))}
       </nav>
 
-      <div className="activity">
-        <div className="activity-head">Activity</div>
-        {activity.length === 0 ? (
-          <p className="activity-empty">Drafts and sends will show up here.</p>
-        ) : (
-          <ul>
-            {activity.slice(0, 12).map((a) => (
-              <li key={a.id}>
-                <button
-                  type="button"
-                  className="activity-item"
-                  disabled={!a.threadId}
-                  onClick={() => a.threadId && onOpenThread(a.threadId)}
-                >
-                  <span className={`activity-kind ${a.kind}`}>{a.kind === 'sent' ? 'Sent' : 'Draft'}</span>
-                  <span className="activity-subject">{a.subject || '(no subject)'}</span>
-                  <span className="activity-time">{formatDate(a.at)}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+      {!collapsed && (
+        <div className="activity">
+          <div className="activity-head">Activity</div>
+          {activity.length === 0 ? (
+            <p className="activity-empty">Drafts and sends will show up here.</p>
+          ) : (
+            <ul>
+              {activity.slice(0, 12).map((a) => (
+                <li key={a.id}>
+                  <button
+                    type="button"
+                    className="activity-item"
+                    disabled={!a.threadId}
+                    onClick={() => a.threadId && onOpenThread(a.threadId)}
+                  >
+                    <span className={`activity-kind ${a.kind}`}>{a.kind === 'sent' ? 'Sent' : 'Draft'}</span>
+                    <span className="activity-subject">{a.subject || '(no subject)'}</span>
+                    <span className="activity-time">{formatDate(a.at)}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
-      <div className="sidebar-foot">
-        <span className="account-email" title={account?.email ?? 'Not connected'}>
-          {account?.email ?? 'Not connected'}
-        </span>
-        <button type="button" className="chip ghost" disabled={busy !== null} onClick={onConnect}>
-          {account ? 'Refresh' : 'Connect'}
-        </button>
-      </div>
+      {!collapsed && (
+        <div className="sidebar-foot">
+          <span className="account-email" title={account?.email ?? 'Not connected'}>
+            {account?.email ?? 'Not connected'}
+          </span>
+          <button type="button" className="chip ghost" disabled={busy !== null} onClick={onConnect}>
+            {account ? 'Refresh' : 'Connect'}
+          </button>
+        </div>
+      )}
     </aside>
   )
 }
