@@ -69,7 +69,7 @@ inbox threads appear. Click a thread, then click **Generate** to draft a reply â
 and add a nudge like "shorter", then **Generate** again to revise. Tokens are stored in the
 macOS Keychain.
 
-You can also skip the `.env` and enter everything in-app: click **Settings** (top right) and
+You can also skip the `.env` and enter everything in-app: open **Settings** in the left sidebar and
 fill in the Google Client ID / secret and AI key â€” secrets go to the Keychain, the rest to
 local storage. `.env` values are used as a fallback.
 

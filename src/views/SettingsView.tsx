@@ -1,28 +1,27 @@
 import { useState } from 'react'
-import { loadSettings, saveSettings, SECRET_KEYS, type StoredSettings } from './services/appSettings'
-import { setSecret } from './services/secrets'
+import { loadSettings, saveSettings, SECRET_KEYS, type StoredSettings } from '../services/appSettings'
+import { setSecret } from '../services/secrets'
 
-interface Props {
-  onClose: () => void
-  onSaved: () => void
-}
-
-export function SettingsDialog({ onClose, onSaved }: Props) {
+export function SettingsView({ onSaved }: { onSaved: () => void }) {
   const [settings, setSettings] = useState<StoredSettings>(loadSettings())
   const [clientSecret, setClientSecret] = useState('')
   const [geminiKey, setGeminiKey] = useState('')
   const [groqKey, setGroqKey] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [saved, setSaved] = useState(false)
 
   const save = async () => {
     setSaving(true)
     setError(null)
+    setSaved(false)
     try {
       saveSettings(settings)
       if (clientSecret) await setSecret(SECRET_KEYS.googleClientSecret, clientSecret)
       if (geminiKey) await setSecret(SECRET_KEYS.geminiApiKey, geminiKey)
       if (groqKey) await setSecret(SECRET_KEYS.groqApiKey, groqKey)
+      setClientSecret(''); setGeminiKey(''); setGroqKey('')
+      setSaved(true)
       onSaved()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -32,13 +31,11 @@ export function SettingsDialog({ onClose, onSaved }: Props) {
   }
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-head">
-          <span className="modal-title">Settings</span>
-          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close">×</button>
-        </div>
+    <div className="view">
+      <h1 className="view-title">Settings</h1>
+      <p className="view-sub">Credentials for Gmail and the AI drafter. Secrets are stored in the macOS Keychain.</p>
 
+      <div className="card settings-card">
         <label className="field">
           <span>Google Client ID</span>
           <input
@@ -64,30 +61,29 @@ export function SettingsDialog({ onClose, onSaved }: Props) {
             value={settings.aiProvider}
             onChange={(e) => setSettings({ ...settings, aiProvider: e.target.value === 'groq' ? 'groq' : 'gemini' })}
           >
+            <option value="groq">Groq (free — recommended)</option>
             <option value="gemini">Gemini (free tier)</option>
-            <option value="groq">Groq (free)</option>
           </select>
         </label>
 
         <label className="field">
-          <span>Gemini API key <em>· Keychain, leave blank to keep</em></span>
-          <input type="password" value={geminiKey} onChange={(e) => setGeminiKey(e.target.value)} placeholder="AIza…" />
-        </label>
-
-        <label className="field">
-          <span>Groq API key <em>· Keychain, optional</em></span>
+          <span>Groq API key <em>· Keychain, leave blank to keep</em></span>
           <input type="password" value={groqKey} onChange={(e) => setGroqKey(e.target.value)} placeholder="gsk_…" />
         </label>
 
-        <p className="hint">Secrets are stored in the macOS Keychain, never in the repo. Reconnect after saving.</p>
-        {error && <div className="banner error">{error}</div>}
+        <label className="field">
+          <span>Gemini API key <em>· Keychain, optional</em></span>
+          <input type="password" value={geminiKey} onChange={(e) => setGeminiKey(e.target.value)} placeholder="AIza…" />
+        </label>
+      </div>
 
-        <div className="modal-actions">
-          <button type="button" className="regen" onClick={onClose}>Cancel</button>
-          <button type="button" className="send" disabled={saving} onClick={() => void save()}>
-            {saving ? 'Saving…' : 'Save'}
-          </button>
-        </div>
+      {error && <div className="banner error">{error}</div>}
+      {saved && !error && <div className="banner ok">Saved.</div>}
+
+      <div className="view-actions">
+        <button type="button" className="send" disabled={saving} onClick={() => void save()}>
+          {saving ? 'Saving…' : 'Save'}
+        </button>
       </div>
     </div>
   )

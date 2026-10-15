@@ -5,12 +5,17 @@ import type { AiProvider } from './ai/aiProvider'
 import { buildSystemPrompt, buildUserPrompt } from './ai/prompt'
 import type { MailboxProvider } from './services/mailbox'
 import { createAiProvider, createMailboxProvider } from './services/providerFactory'
-import { SettingsDialog } from './SettingsDialog'
+import { Sidebar, type ActivityItem, type View } from './components/Sidebar'
+import { DashboardView } from './views/DashboardView'
+import { SettingsView } from './views/SettingsView'
 import { ThreadList } from './components/ThreadList'
 import { ReaderPane } from './components/ReaderPane'
 import { DraftPanel } from './components/DraftPanel'
 
+const VIEW_TITLE: Record<View, string> = { dashboard: 'Dashboard', inbox: 'Inbox', settings: 'Settings' }
+
 function App() {
+  const [view, setView] = useState<View>('inbox')
   const [mailbox, setMailbox] = useState<MailboxProvider | null>(null)
   const [ai, setAi] = useState<AiProvider | null>(null)
   const [account, setAccount] = useState<Account | null>(null)
@@ -23,11 +28,17 @@ function App() {
   const [instruction, setInstruction] = useState('')
   const [generating, setGenerating] = useState(false)
   const [draftsThisSession, setDraftsThisSession] = useState(0)
+  const [activity, setActivity] = useState<ActivityItem[]>([])
   const [testMode, setTestMode] = useState(true)
   const [status, setStatus] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [showSettings, setShowSettings] = useState(false)
   const startedRef = useRef(false)
+  const activityIdRef = useRef(0)
+
+  const pushActivity = useCallback((item: Omit<ActivityItem, 'id'>) => {
+    activityIdRef.current += 1
+    setActivity((prev) => [{ id: activityIdRef.current, ...item }, ...prev].slice(0, 50))
+  }, [])
 
   const generate = useCallback(
     async (
@@ -44,19 +55,25 @@ function App() {
           instruction: opts.instruction, priorDraft: opts.priorDraft,
         }))
         setDraftsThisSession((n) => n + 1)
+        pushActivity({ kind: 'draft', subject: thread.subject, tone: nextTone, at: Date.now(), threadId: thread.id })
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err))
       } finally {
         setGenerating(false)
       }
     },
-    [],
+    [pushActivity],
   )
 
   const openThread = useCallback(async (box: MailboxProvider, id: string) => {
     setSelectedId(id); setStatus(null); setDraft(''); setInstruction('')
     setSelected(await box.getThread(id))
   }, [])
+
+  const openThreadById = useCallback((threadId: string) => {
+    setView('inbox')
+    if (mailbox) void openThread(mailbox, threadId)
+  }, [mailbox, openThread])
 
   const connect = useCallback(async () => {
     setError(null); setStatus(null); setThreads([]); setSelected(null); setSelectedId(null)
@@ -95,12 +112,13 @@ function App() {
     try {
       const sent = await mailbox.send(selected.id, draft.trim())
       setStatus(`Sent to ${sent.to.map((a) => a.email).join(', ')}`)
+      pushActivity({ kind: 'sent', subject: selected.subject, tone, at: Date.now(), threadId: selected.id })
       setThreads(await mailbox.listThreads())
       setSelected(await mailbox.getThread(selected.id))
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     }
-  }, [mailbox, selected, draft])
+  }, [mailbox, selected, draft, tone, pushActivity])
 
   const handleGenerate = useCallback(() => {
     if (selected && ai && account) {
@@ -118,80 +136,91 @@ function App() {
     return `SYSTEM\n${system}\n\nUSER\n${user}`
   }, [selected, tone, instruction])
 
+  const sentThisSession = useMemo(() => activity.filter((a) => a.kind === 'sent').length, [activity])
   const canSend = mailbox !== null && selected !== null && draft.trim() !== ''
 
   return (
     <div className="app">
-      <header className="topbar">
-        <div className="brand">ColdEmailAgentic</div>
-        <div className="topbar-right">
-          <span className="account">
-            {account ? (
-              <>
-                <span className="dot" aria-hidden="true" />
-                <span className="account-email">{account.email}</span>
-              </>
-            ) : (
-              <span>Not connected</span>
-            )}
-          </span>
-          {draftsThisSession > 0 && <span className="badge">{draftsThisSession} drafts</span>}
-          <label className="toggle">
-            <input type="checkbox" checked={testMode} onChange={(e) => setTestMode(e.target.checked)} />
-            Test mode
-          </label>
-          <button type="button" className="chip ghost" disabled={busy !== null} onClick={() => void connect()}>
-            {account ? 'Refresh' : 'Connect Gmail'}
-          </button>
-          <button type="button" className="chip ghost" onClick={() => setShowSettings(true)}>Settings</button>
-        </div>
-      </header>
+      <Sidebar
+        view={view}
+        onNavigate={setView}
+        account={account}
+        activity={activity}
+        onOpenThread={openThreadById}
+        busy={busy}
+        onConnect={() => void connect()}
+      />
 
-      {busy && <div className="banner">{busy}</div>}
-      {error && <div className="banner error">{error}</div>}
-      {status && <div className="banner ok">{status}</div>}
+      <div className="main">
+        <header className="topbar">
+          <span className="view-heading">{VIEW_TITLE[view]}</span>
+          <div className="topbar-right">
+            {draftsThisSession > 0 && <span className="badge">{draftsThisSession} drafts</span>}
+            <label className="toggle">
+              <input type="checkbox" checked={testMode} onChange={(e) => setTestMode(e.target.checked)} />
+              Test mode
+            </label>
+          </div>
+        </header>
 
-      <div className="workspace">
-        <ThreadList
-          threads={threads}
-          selectedId={selectedId}
-          onSelect={(id) => { if (mailbox) void openThread(mailbox, id) }}
-        />
+        {busy && <div className="banner">{busy}</div>}
+        {error && <div className="banner error">{error}</div>}
+        {status && <div className="banner ok">{status}</div>}
 
-        <main className="reader">
-          {selected ? (
-            <>
-              <ReaderPane thread={selected} />
-              <DraftPanel
-                ai={ai}
-                generating={generating}
-                draft={draft}
-                onDraftChange={setDraft}
-                tone={tone}
-                onToneChange={setTone}
-                instruction={instruction}
-                onInstructionChange={setInstruction}
-                onGenerate={handleGenerate}
-                onSend={() => void onSend()}
-                canSend={canSend}
-                testMode={testMode}
-                promptText={promptText}
+        <div className="content">
+          {view === 'dashboard' && (
+            <DashboardView
+              account={account}
+              threadCount={threads.length}
+              draftsThisSession={draftsThisSession}
+              sentThisSession={sentThisSession}
+              activity={activity}
+              aiLabel={ai?.descriptor.label ?? null}
+              aiPrivacy={ai?.descriptor.privacy ?? null}
+              onOpenThread={openThreadById}
+              onGoInbox={() => setView('inbox')}
+            />
+          )}
+
+          {view === 'inbox' && (
+            <div className="workspace">
+              <ThreadList
+                threads={threads}
+                selectedId={selectedId}
+                onSelect={(id) => { if (mailbox) void openThread(mailbox, id) }}
               />
-            </>
-          ) : (
-            <div className="empty">
-              {busy ?? (account ? 'Select a conversation' : 'Connect Gmail to load your inbox.')}
+              <section className="reader">
+                {selected ? (
+                  <>
+                    <ReaderPane thread={selected} />
+                    <DraftPanel
+                      ai={ai}
+                      generating={generating}
+                      draft={draft}
+                      onDraftChange={setDraft}
+                      tone={tone}
+                      onToneChange={setTone}
+                      instruction={instruction}
+                      onInstructionChange={setInstruction}
+                      onGenerate={handleGenerate}
+                      onSend={() => void onSend()}
+                      canSend={canSend}
+                      testMode={testMode}
+                      promptText={promptText}
+                    />
+                  </>
+                ) : (
+                  <div className="empty">
+                    {busy ?? (account ? 'Select a conversation' : 'Connect Gmail to load your inbox.')}
+                  </div>
+                )}
+              </section>
             </div>
           )}
-        </main>
-      </div>
 
-      {showSettings && (
-        <SettingsDialog
-          onClose={() => setShowSettings(false)}
-          onSaved={() => { setShowSettings(false); void connect() }}
-        />
-      )}
+          {view === 'settings' && <SettingsView onSaved={() => void connect()} />}
+        </div>
+      </div>
     </div>
   )
 }
