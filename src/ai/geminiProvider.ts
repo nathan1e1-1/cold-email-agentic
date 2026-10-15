@@ -1,6 +1,6 @@
 import type { HttpClient } from '../mail/httpClient';
 import type { AiDescriptor, AiProvider, GenerateRequest } from './aiProvider';
-import { buildSystemPrompt, buildUserPrompt } from './prompt';
+import { buildPromptPack } from './prompt';
 import { cleanDraft } from './sanitize';
 import { MAX_RETRY_WAIT_MS, parseRetryDelayMs } from './retry';
 
@@ -62,13 +62,7 @@ export class GeminiProvider implements AiProvider {
   }
 
   async generate(req: GenerateRequest): Promise<string> {
-    const system = buildSystemPrompt({ tone: req.tone, signature: req.signature });
-    const user = buildUserPrompt({
-      thread: req.thread,
-      tone: req.tone,
-      instruction: req.instruction,
-      priorDraft: req.priorDraft,
-    });
+    const { system, user } = buildPromptPack(req);
     const body = JSON.stringify({
       systemInstruction: { parts: [{ text: system }] },
       contents: [{ role: 'user', parts: [{ text: user }] }],

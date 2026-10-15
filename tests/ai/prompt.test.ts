@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   buildSystemPrompt, buildUserPrompt, selectContextMessages, MAX_CONTEXT_MESSAGES,
+  buildPromptPack, parseColdDraft,
 } from '../../src/ai/prompt';
 import type { Direction, Message, Thread } from '../../src/domain/types';
 
@@ -75,5 +76,30 @@ describe('prompt', () => {
     const big = 'x'.repeat(3000);
     const selected = selectContextMessages([msg('m1', 'inbound', big), msg('m2', 'inbound', big)], 5, 4000);
     expect(selected.map((m) => m.id)).toEqual(['m2']);
+  });
+
+  it('builds a cold prompt with the contact context and asks for a subject', () => {
+    const pack = buildPromptPack({
+      mode: 'cold',
+      contact: { name: 'Dana', email: 'dana@acme.com', notes: 'met at the AI meetup' },
+      ownEmail: 'me@x.com',
+      tone: 'professional',
+    });
+    expect(pack.system).toMatch(/cold outreach/i);
+    expect(pack.system).toMatch(/Subject:/);
+    expect(pack.user).toContain('<contact>');
+    expect(pack.user).toContain('dana@acme.com');
+    expect(pack.user).toContain('met at the AI meetup');
+  });
+
+  it('parses a cold draft into subject and body', () => {
+    expect(parseColdDraft('Subject: Quick question\n\nHi Dana, want to chat?')).toEqual({
+      subject: 'Quick question',
+      body: 'Hi Dana, want to chat?',
+    });
+  });
+
+  it('falls back to body-only when there is no subject line', () => {
+    expect(parseColdDraft('Just a body')).toEqual({ subject: null, body: 'Just a body' });
   });
 });

@@ -172,6 +172,15 @@ describe('NodeRepository', () => {
     expect((await repo.getContactByEmail('A@Z.COM'))?.id).toBe(c?.id);
   });
 
+  it('lists contacts', async () => {
+    const repo = mk();
+    await repo.upsertContact({ name: 'A', email: 'a@z.com', notes: '', doNotContact: false });
+    await repo.upsertContact({ name: 'B', email: 'b@z.com', notes: '', doNotContact: false });
+    const contacts = await repo.listContacts();
+    expect(contacts.length).toBe(2);
+    expect(contacts.map((c) => c.email).sort()).toEqual(['a@z.com', 'b@z.com']);
+  });
+
   it('records sends and answers rate/duplicate queries', async () => {
     const repo = mk();
     await repo.recordSend(1000, 'cold', 'x@z.com');

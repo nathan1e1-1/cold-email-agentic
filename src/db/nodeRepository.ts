@@ -187,6 +187,10 @@ export class NodeRepository implements Repository {
     return row ? this.mapContact(row) : null;
   }
 
+  async listContacts(): Promise<Contact[]> {
+    return this.all<any>('SELECT * FROM contacts ORDER BY created_at DESC, id DESC').map((r) => this.mapContact(r));
+  }
+
   async setDoNotContact(email: string, value: boolean): Promise<void> {
     this.run('UPDATE contacts SET do_not_contact=? WHERE email=?', toBool(value), normEmail(email));
   }

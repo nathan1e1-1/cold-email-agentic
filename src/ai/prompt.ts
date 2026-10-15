@@ -1,4 +1,5 @@
 import type { Message, Thread, TonePreset } from '../domain/types';
+import type { ContactContext, GenerateRequest } from './aiProvider';
 
 export const MAX_CONTEXT_MESSAGES = 5;
 export const MAX_CONTEXT_CHARS = 4000;
@@ -80,4 +81,70 @@ export function buildUserPrompt(input: PromptInput): string {
   if (input.priorDraft) parts.push('', `<prior_draft>\n${input.priorDraft}\n</prior_draft>`);
   parts.push('', 'Draft the reply body now.');
   return parts.join('\n');
+}
+
+export interface ColdPromptInput {
+  contact: ContactContext;
+  tone: TonePreset;
+  instruction?: string;
+  priorDraft?: string;
+}
+
+export function buildColdSystemPrompt(opts: { tone: TonePreset; signature?: string }): string {
+  const lines = [
+    'You write first-touch cold outreach emails on behalf of the user to someone who has never emailed them.',
+    'Output exactly two parts and nothing else: a single line "Subject: <subject>", then a blank line, then the email body.',
+    'Ground every statement in the provided contact context. Never invent facts, mutual connections, prior contact, or commitments.',
+    'Be honest and specific: no fake urgency, no gimmicks, no flattery. Respect the reader\'s time.',
+    'Keep the body under ~120 words. Lead with why you are reaching out and what you want. No filler or clichés.',
+    'Plain text only: no markdown, no bullets unless clearly warranted. No bracketed placeholders.',
+    `7. ${TONE_GUIDANCE[opts.tone]}`,
+  ];
+  if (opts.signature) {
+    lines.push(`8. End the body with this signature verbatim, on its own line:\n${opts.signature}`);
+  }
+  return lines.join('\n');
+}
+
+export function buildColdUserPrompt(input: ColdPromptInput): string {
+  const parts = [
+    '<contact>',
+    `name: ${input.contact.name ?? ''}`,
+    `email: ${input.contact.email}`,
+    `context: ${input.contact.notes ?? ''}`,
+    '</contact>',
+  ];
+  if (input.instruction) parts.push('', `<user_guidance>\n${input.instruction}\n</user_guidance>`);
+  if (input.priorDraft) parts.push('', `<prior_draft>\n${input.priorDraft}\n</prior_draft>`);
+  parts.push('', 'Write the first-touch email now (Subject line, blank line, then body).');
+  return parts.join('\n');
+}
+
+export function buildPromptPack(req: GenerateRequest): { system: string; user: string } {
+  if (req.mode === 'cold') {
+    return {
+      system: buildColdSystemPrompt({ tone: req.tone, signature: req.signature }),
+      user: buildColdUserPrompt({
+        contact: req.contact ?? { email: '' },
+        tone: req.tone,
+        instruction: req.instruction,
+        priorDraft: req.priorDraft,
+      }),
+    };
+  }
+  return {
+    system: buildSystemPrompt({ tone: req.tone, signature: req.signature }),
+    user: buildUserPrompt({
+      thread: req.thread as Thread,
+      tone: req.tone,
+      instruction: req.instruction,
+      priorDraft: req.priorDraft,
+    }),
+  };
+}
+
+export function parseColdDraft(text: string): { subject: string | null; body: string } {
+  const match = /^\s*Subject:\s*(.+?)\r?\n\r?\n([\s\S]+)$/.exec(text);
+  if (match) return { subject: match[1].trim(), body: match[2].trim() };
+  return { subject: null, body: text.trim() };
 }

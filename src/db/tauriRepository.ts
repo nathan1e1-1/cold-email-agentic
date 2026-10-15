@@ -192,6 +192,10 @@ export class TauriRepository implements Repository {
     return row ? this.mapContact(row) : null;
   }
 
+  async listContacts(): Promise<Contact[]> {
+    return (await this.all<any>('SELECT * FROM contacts ORDER BY created_at DESC, id DESC')).map((r) => this.mapContact(r));
+  }
+
   async setDoNotContact(email: string, value: boolean): Promise<void> {
     await this.db.execute('UPDATE contacts SET do_not_contact=? WHERE email=?', [toBool(value), normEmail(email)]);
   }
