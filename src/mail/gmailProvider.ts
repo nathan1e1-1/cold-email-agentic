@@ -10,6 +10,7 @@ import { utf8ToBase64Url } from './encoding';
 import { mapWithConcurrency } from './concurrency';
 
 const BASE = 'https://gmail.googleapis.com/gmail/v1/users/me';
+const MAX_QUOTA_BACKOFF_MS = 60_000;
 
 interface RequestOptions {
   body?: string;
@@ -43,6 +44,7 @@ export class GmailProvider implements MailProvider {
   private concurrency: number;
   private maxRetries: number;
   private backoffMs: number;
+  private throttleMs: number;
   private sleep: (ms: number) => Promise<void>;
 
   constructor(deps: {
@@ -52,14 +54,16 @@ export class GmailProvider implements MailProvider {
     concurrency?: number;
     maxRetries?: number;
     backoffMs?: number;
+    throttleMs?: number;
     sleep?: (ms: number) => Promise<void>;
   }) {
     this.http = deps.http;
     this.authenticator = deps.auth;
     this.ownEmail = deps.ownEmail;
     this.concurrency = deps.concurrency ?? 3;
-    this.maxRetries = deps.maxRetries ?? 3;
-    this.backoffMs = deps.backoffMs ?? 1500;
+    this.maxRetries = deps.maxRetries ?? 4;
+    this.backoffMs = deps.backoffMs ?? 3000;
+    this.throttleMs = deps.throttleMs ?? 150;
     this.sleep = deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
   }
 
@@ -85,7 +89,9 @@ export class GmailProvider implements MailProvider {
         body: opts.body,
       });
       if (isQuotaError(res) && attempt < this.maxRetries) {
-        await this.sleep(this.backoffMs * 2 ** attempt);
+        // Gmail's per-minute query budget resets each minute, so wait out the
+        // window (capped) rather than giving up after a couple of seconds.
+        await this.sleep(Math.min(this.backoffMs * 2 ** attempt, MAX_QUOTA_BACKOFF_MS));
         continue;
       }
       return res;
@@ -107,7 +113,10 @@ export class GmailProvider implements MailProvider {
     ensureOk(res, 'Gmail listThreads');
     const json = JSON.parse(res.body) as { threads?: { id: string }[] };
     const ids = (json.threads ?? []).map((t) => t.id);
-    const threads = await mapWithConcurrency(ids, this.concurrency, (id) => this.getThread(id));
+    const threads = await mapWithConcurrency(ids, this.concurrency, (id) => this.getThread(id), {
+      sleep: this.sleep,
+      minIntervalMs: this.throttleMs,
+    });
     const profile = await this.getProfile();
     return { threads, seededHistoryId: profile.historyId };
   }
@@ -119,7 +128,10 @@ export class GmailProvider implements MailProvider {
   }
 
   async getThreadsByIds(ids: string[]): Promise<Thread[]> {
-    return mapWithConcurrency(ids, this.concurrency, (id) => this.getThread(id));
+    return mapWithConcurrency(ids, this.concurrency, (id) => this.getThread(id), {
+      sleep: this.sleep,
+      minIntervalMs: this.throttleMs,
+    });
   }
 
   async listHistoryChanges(opts: { historyId: string }): Promise<HistoryDelta> {
