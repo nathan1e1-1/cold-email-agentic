@@ -96,4 +96,25 @@ describe('GmailMailboxAdapter', () => {
       references: ['<m1@acme.com>'],
     });
   });
+
+  it('sends a new first-touch email', async () => {
+    const { provider, sent } = fakeProvider();
+    const adapter = new GmailMailboxAdapter(() => provider);
+    await adapter.connect();
+    const message = await adapter.sendNew({
+      to: { name: 'Dana', email: 'dana@acme.com' },
+      subject: 'Hello',
+      bodyText: 'Hi Dana',
+      listUnsubscribeMailto: 'mailto:me@x.com?subject=unsubscribe',
+    });
+    expect(message.subject).toBe('Hello');
+    expect(message.direction).toBe('outbound');
+    expect(message.to[0].email).toBe('dana@acme.com');
+    expect(sent[0]).toMatchObject({
+      subject: 'Hello',
+      bodyText: 'Hi Dana',
+      listUnsubscribeMailto: 'mailto:me@x.com?subject=unsubscribe',
+    });
+    expect(sent[0].threadId).toBeUndefined();
+  });
 });

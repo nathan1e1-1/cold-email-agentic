@@ -8,11 +8,19 @@ import { createAiProvider, createMailboxProvider } from './services/providerFact
 import { Sidebar, type ActivityItem, type View } from './components/Sidebar'
 import { DashboardView } from './views/DashboardView'
 import { SettingsView } from './views/SettingsView'
+import { OutreachView } from './views/OutreachView'
+import { getRepository } from './db/repositoryFactory'
+import type { Repository } from './db/repository'
 import { ThreadList } from './components/ThreadList'
 import { ReaderPane } from './components/ReaderPane'
 import { DraftPanel } from './components/DraftPanel'
 
-const VIEW_TITLE: Record<View, string> = { dashboard: 'Dashboard', inbox: 'Inbox', settings: 'Settings' }
+const VIEW_TITLE: Record<View, string> = {
+  outreach: 'Outreach',
+  inbox: 'Inbox',
+  dashboard: 'Dashboard',
+  settings: 'Settings',
+}
 
 const COLLAPSE_KEY = 'coldemailagentic.sidebarCollapsed'
 
@@ -25,8 +33,9 @@ function loadCollapsed(): boolean {
 }
 
 function App() {
-  const [view, setView] = useState<View>('inbox')
+  const [view, setView] = useState<View>('outreach')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(loadCollapsed)
+  const [repo, setRepo] = useState<Repository | null>(null)
   const [mailbox, setMailbox] = useState<MailboxProvider | null>(null)
   const [ai, setAi] = useState<AiProvider | null>(null)
   const [account, setAccount] = useState<Account | null>(null)
@@ -129,6 +138,18 @@ function App() {
     void connect()
   }, [connect])
 
+  useEffect(() => {
+    let active = true
+    void getRepository()
+      .then((r) => { if (active) setRepo(r) })
+      .catch((err) => { if (active) setError(err instanceof Error ? err.message : String(err)) })
+    return () => { active = false }
+  }, [])
+
+  const onColdSent = useCallback((subject: string) => {
+    pushActivity({ kind: 'sent', subject, at: Date.now(), threadId: null })
+  }, [pushActivity])
+
   const onSend = useCallback(async () => {
     if (!mailbox || !selected || draft.trim() === '') return
     setError(null)
@@ -207,6 +228,17 @@ function App() {
         {status && <div className="banner ok">{status}</div>}
 
         <div className="content">
+          {view === 'outreach' && (
+            <OutreachView
+              ai={ai}
+              mailbox={mailbox}
+              repo={repo}
+              ownEmail={account?.ownEmail ?? ''}
+              testMode={testMode}
+              onSent={onColdSent}
+            />
+          )}
+
           {view === 'dashboard' && (
             <DashboardView
               account={account}
@@ -259,7 +291,7 @@ function App() {
             </div>
           )}
 
-          {view === 'settings' && <SettingsView onSaved={() => void connect()} />}
+          {view === 'settings' && <SettingsView repo={repo} onSaved={() => void connect()} />}
         </div>
       </div>
     </div>

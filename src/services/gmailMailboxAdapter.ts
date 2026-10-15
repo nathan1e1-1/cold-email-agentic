@@ -1,6 +1,6 @@
 import type { Account, Message, Thread } from '../domain/types';
 import type { MailProvider } from '../mail/mailProvider';
-import type { MailboxProvider } from './mailbox';
+import type { MailboxProvider, NewEmailInput } from './mailbox';
 
 export type MailProviderFactory = (ownEmail: string) => MailProvider;
 
@@ -78,6 +78,30 @@ export class GmailMailboxAdapter implements MailboxProvider {
       subject,
       bodyText: body,
       hasListUnsubscribe: false,
+      date: Date.now(),
+      direction: 'outbound',
+    };
+  }
+
+  async sendNew(input: NewEmailInput): Promise<Message> {
+    const provider = this.requireProvider();
+    const ownEmail = this.account?.ownEmail ?? '';
+    const result = await provider.send({
+      to: [input.to],
+      subject: input.subject,
+      bodyText: input.bodyText,
+      listUnsubscribeMailto: input.listUnsubscribeMailto,
+    });
+    return {
+      id: result.messageId,
+      rfcMessageId: '',
+      references: [],
+      from: { email: ownEmail },
+      to: [input.to],
+      cc: [],
+      subject: input.subject,
+      bodyText: input.bodyText,
+      hasListUnsubscribe: Boolean(input.listUnsubscribeMailto),
       date: Date.now(),
       direction: 'outbound',
     };

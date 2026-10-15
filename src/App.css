@@ -955,3 +955,27 @@
     max-height: 42vh;
   }
 }
+
+.new-contact {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 550;
+  text-align: center;
+}
+
+.new-contact:hover {
+  background: var(--surface-2);
+}
+
+.reader > .composer:first-child {
+  margin-top: 0;
+}
+
+.composer-body .field {
+  max-width: 560px;
+}

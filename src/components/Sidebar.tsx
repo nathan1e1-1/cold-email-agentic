@@ -1,13 +1,13 @@
 import type { Account, TonePreset } from '../domain/types'
 import { formatDate } from '../lib/format'
 
-export type View = 'dashboard' | 'inbox' | 'settings'
+export type View = 'outreach' | 'inbox' | 'dashboard' | 'settings'
 
 export interface ActivityItem {
   id: number
   kind: 'draft' | 'sent'
   subject: string
-  tone: TonePreset
+  tone?: TonePreset
   at: number
   threadId: string | null
 }
@@ -22,6 +22,14 @@ function NavIcon({ name }: { name: View }) {
     strokeWidth: 1.8,
     strokeLinecap: 'round' as const,
     strokeLinejoin: 'round' as const,
+  }
+  if (name === 'outreach') {
+    return (
+      <svg {...common} aria-hidden="true">
+        <path d="M22 2 11 13" />
+        <path d="M22 2 15 22l-4-9-9-4 20-7z" />
+      </svg>
+    )
   }
   if (name === 'dashboard') {
     return (
@@ -70,8 +78,9 @@ function Chevron({ collapsed }: { collapsed: boolean }) {
 }
 
 const NAV: { id: View; label: string }[] = [
-  { id: 'dashboard', label: 'Dashboard' },
+  { id: 'outreach', label: 'Outreach' },
   { id: 'inbox', label: 'Inbox' },
+  { id: 'dashboard', label: 'Dashboard' },
   { id: 'settings', label: 'Settings' },
 ]
 
