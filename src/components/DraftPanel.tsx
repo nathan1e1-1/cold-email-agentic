@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { AiProvider } from '../ai/aiProvider'
 import type { TonePreset } from '../domain/types'
 import { TONE_PRESETS } from '../domain/types'
@@ -14,12 +15,16 @@ interface Props {
   onGenerate: () => void
   onSend: () => void
   canSend: boolean
+  testMode: boolean
+  promptText: string | null
 }
 
 export function DraftPanel({
   ai, generating, draft, onDraftChange, tone, onToneChange,
-  instruction, onInstructionChange, onGenerate, onSend, canSend,
+  instruction, onInstructionChange, onGenerate, onSend, canSend, testMode, promptText,
 }: Props) {
+  const [showPrompt, setShowPrompt] = useState(false)
+
   return (
     <div className="draft-panel">
       <div className="draft-head">
@@ -31,7 +36,15 @@ export function DraftPanel({
         )}
         {generating && <span className="hint">generating…</span>}
         {!ai && <span className="hint">add an AI key in Settings</span>}
+        <span className="spacer" />
+        {promptText && (
+          <button type="button" className="linkbtn" onClick={() => setShowPrompt((v) => !v)}>
+            {showPrompt ? 'Hide prompt' : 'Preview prompt'}
+          </button>
+        )}
       </div>
+
+      {showPrompt && promptText && <pre className="prompt-preview">{promptText}</pre>}
 
       <div className="tones">
         {TONE_PRESETS.map((t) => (
@@ -51,7 +64,7 @@ export function DraftPanel({
         className="draft-text"
         value={draft}
         onChange={(e) => onDraftChange(e.target.value)}
-        placeholder="The agent's draft appears here…"
+        placeholder="Click Generate to draft a reply…"
         rows={5}
       />
 
@@ -65,12 +78,16 @@ export function DraftPanel({
         <button type="button" className="regen" disabled={generating || !ai} onClick={onGenerate}>
           Generate
         </button>
-        <button type="button" className="send" disabled={!canSend || generating} onClick={onSend}>
+        <button type="button" className="send" disabled={!canSend || generating || testMode} onClick={onSend}>
           Send
         </button>
       </div>
 
-      <span className="hint">Sends a real reply from your Gmail account.</span>
+      <span className="hint">
+        {testMode
+          ? 'Test mode is on — drafts are never sent. Generate freely.'
+          : 'Sends a real reply from your Gmail account.'}
+      </span>
     </div>
   )
 }

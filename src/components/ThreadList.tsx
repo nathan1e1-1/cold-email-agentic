@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { Thread } from '../domain/types'
 import { formatDate } from '../lib/format'
 import { Avatar } from './Avatar'
@@ -15,13 +16,32 @@ interface Props {
 }
 
 export function ThreadList({ threads, selectedId, onSelect }: Props) {
+  const [query, setQuery] = useState('')
+  const q = query.trim().toLowerCase()
+  const visible = q
+    ? threads.filter((t) => {
+        const last = t.messages.at(-1)
+        const sender = (last?.from.name ?? last?.from.email ?? '').toLowerCase()
+        return sender.includes(q) || t.subject.toLowerCase().includes(q) || t.snippet.toLowerCase().includes(q)
+      })
+    : threads
+
   return (
     <aside className="list">
       <div className="list-head">
-        Inbox <span className="count">{threads.length}</span>
+        Inbox <span className="count">{visible.length}</span>
+      </div>
+      <div className="list-search">
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search sender or subject…"
+          aria-label="Search threads"
+        />
       </div>
       <ul>
-        {threads.map((t) => {
+        {visible.map((t) => {
           const label = senderLabel(t)
           return (
             <li key={t.id}>

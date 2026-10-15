@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import type { Account, Thread, TonePreset } from './domain/types'
 import type { AiProvider } from './ai/aiProvider'
+import { buildSystemPrompt, buildUserPrompt } from './ai/prompt'
 import type { MailboxProvider } from './services/mailbox'
 import { createAiProvider, createMailboxProvider } from './services/providerFactory'
 import { SettingsDialog } from './SettingsDialog'
@@ -21,6 +22,8 @@ function App() {
   const [tone, setTone] = useState<TonePreset>('professional')
   const [instruction, setInstruction] = useState('')
   const [generating, setGenerating] = useState(false)
+  const [draftsThisSession, setDraftsThisSession] = useState(0)
+  const [testMode, setTestMode] = useState(true)
   const [status, setStatus] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [showSettings, setShowSettings] = useState(false)
@@ -40,6 +43,7 @@ function App() {
           thread, ownEmail: acc.ownEmail, tone: nextTone,
           instruction: opts.instruction, priorDraft: opts.priorDraft,
         }))
+        setDraftsThisSession((n) => n + 1)
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err))
       } finally {
@@ -107,6 +111,13 @@ function App() {
     }
   }, [selected, ai, account, tone, instruction, draft, generate])
 
+  const promptText = useMemo(() => {
+    if (!selected) return null
+    const system = buildSystemPrompt({ tone })
+    const user = buildUserPrompt({ thread: selected, tone, instruction: instruction || undefined })
+    return `SYSTEM\n${system}\n\nUSER\n${user}`
+  }, [selected, tone, instruction])
+
   const canSend = mailbox !== null && selected !== null && draft.trim() !== ''
 
   return (
@@ -124,6 +135,11 @@ function App() {
               <span>Not connected</span>
             )}
           </span>
+          {draftsThisSession > 0 && <span className="badge">{draftsThisSession} drafts</span>}
+          <label className="toggle">
+            <input type="checkbox" checked={testMode} onChange={(e) => setTestMode(e.target.checked)} />
+            Test mode
+          </label>
           <button type="button" className="chip ghost" disabled={busy !== null} onClick={() => void connect()}>
             {account ? 'Refresh' : 'Connect Gmail'}
           </button>
@@ -158,6 +174,8 @@ function App() {
                 onGenerate={handleGenerate}
                 onSend={() => void onSend()}
                 canSend={canSend}
+                testMode={testMode}
+                promptText={promptText}
               />
             </>
           ) : (
