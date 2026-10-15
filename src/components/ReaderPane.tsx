@@ -1,5 +1,6 @@
 import type { Thread } from '../domain/types'
 import { formatDate } from '../lib/format'
+import { Avatar } from './Avatar'
 
 export function ReaderPane({ thread }: { thread: Thread }) {
   return (
@@ -11,15 +12,21 @@ export function ReaderPane({ thread }: { thread: Thread }) {
         </p>
       </div>
       <ol className="messages">
-        {thread.messages.map((m) => (
-          <li key={m.id} className={`message ${m.direction}`}>
-            <div className="message-meta">
-              <span className="message-from">{m.direction === 'outbound' ? 'You' : m.from.name ?? m.from.email}</span>
-              <span className="message-date">{formatDate(m.date)}</span>
-            </div>
-            <div className="message-body">{m.bodyText}</div>
-          </li>
-        ))}
+        {thread.messages.map((m) => {
+          const who = m.direction === 'outbound' ? 'You' : m.from.name ?? m.from.email
+          return (
+            <li key={m.id} className={`message ${m.direction}`}>
+              <Avatar name={who} />
+              <div className="message-body-wrap">
+                <div className="message-meta">
+                  <span className="message-from">{who}</span>
+                  <span className="message-date">{formatDate(m.date)}</span>
+                </div>
+                <div className="message-body">{m.bodyText}</div>
+              </div>
+            </li>
+          )
+        })}
       </ol>
     </>
   )

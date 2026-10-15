@@ -1,36 +1,57 @@
 :root {
-  --bg: #f6f6f8;
-  --panel: #ffffff;
-  --text: #3f3d45;
-  --text-strong: #16151a;
-  --muted: #8a8791;
-  --border: #e5e4e8;
-  --accent: #6d28d9;
-  --accent-weak: #f3effb;
-  --ok-bg: #e9f7ef;
-  --ok-text: #1c7c4a;
-  --err-bg: #fdecec;
-  --err-text: #b42318;
+  --bg: #f6f8f8;
+  --surface: #ffffff;
+  --surface-2: #eef2f1;
+  --text: #1c2626;
+  --text-muted: #5d6b6a;
+  --text-faint: #8a9694;
+  --border: #e4e9e8;
+  --border-strong: #d3dbd9;
+  --primary: #0f766e;
+  --primary-hover: #115e56;
+  --primary-weak: #e6f5f2;
+  --on-primary: #ffffff;
+  --danger: #dc2626;
+  --danger-weak: #fdeceb;
+  --success: #0f8a5f;
+  --success-weak: #e6f6ee;
+  --ring: #0f766e;
+  --shadow-sm: 0 1px 2px rgba(16, 32, 30, 0.06);
+
+  --radius-sm: 8px;
+  --radius: 12px;
+  --radius-lg: 16px;
+
   color-scheme: light dark;
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   font-size: 15px;
   line-height: 1.5;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #121218;
-    --panel: #1a1a22;
-    --text: #c9c7d0;
-    --text-strong: #f3f2f6;
-    --muted: #85828f;
-    --border: #2b2b35;
-    --accent: #b794f6;
-    --accent-weak: #241d33;
-    --ok-bg: #14271d;
-    --ok-text: #6ee7a8;
-    --err-bg: #2a1616;
-    --err-text: #f79a92;
+    --bg: #0e1413;
+    --surface: #161d1c;
+    --surface-2: #1e2726;
+    --text: #e8efee;
+    --text-muted: #9aa8a6;
+    --text-faint: #6f7d7b;
+    --border: #26302f;
+    --border-strong: #33403e;
+    --primary: #2dd4bf;
+    --primary-hover: #5eead4;
+    --primary-weak: #11302c;
+    --on-primary: #05201c;
+    --danger: #f87171;
+    --danger-weak: #2a1616;
+    --success: #34d399;
+    --success-weak: #0f2a20;
+    --ring: #2dd4bf;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   }
 }
 
@@ -48,10 +69,24 @@ body,
 body {
   background: var(--bg);
   color: var(--text);
-  -webkit-font-smoothing: antialiased;
 }
 
 button {
   font: inherit;
+  color: inherit;
   cursor: pointer;
+}
+
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

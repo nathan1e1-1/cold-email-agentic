@@ -124,21 +124,22 @@ function App() {
     <div className="app">
       <header className="topbar">
         <div className="brand">ColdEmailAgentic</div>
-        <div className="account">
-          {account ? (
-            <>
-              <span className="dot" aria-hidden="true" />
-              <span>{account.displayName} &lt;{account.email}&gt;</span>
-              <span className="badge">{mode === 'mock' ? 'mock inbox' : 'gmail'}</span>
-            </>
-          ) : (
-            <span>Not connected</span>
-          )}
-          <span className="modes">
+        <div className="topbar-right">
+          <span className="account">
+            {account ? (
+              <>
+                <span className="dot" aria-hidden="true" />
+                <span className="account-email">{account.email}</span>
+              </>
+            ) : (
+              <span>Not connected</span>
+            )}
+          </span>
+          <span className="modes" role="group" aria-label="Inbox source">
             <button type="button" className={mode === 'mock' ? 'chip active' : 'chip'} disabled={busy !== null} onClick={() => void connect('mock')}>Mock</button>
             <button type="button" className={mode === 'gmail' ? 'chip active' : 'chip'} disabled={busy !== null} onClick={() => void connect('gmail')}>Gmail</button>
-            <button type="button" className="chip" onClick={() => setShowSettings(true)}>Settings</button>
           </span>
+          <button type="button" className="chip ghost" onClick={() => setShowSettings(true)}>Settings</button>
         </div>
       </header>
 
