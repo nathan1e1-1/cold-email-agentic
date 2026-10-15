@@ -159,6 +159,9 @@ export class OAuthAuthenticator implements Authenticator {
   private config: OAuthConfig;
   private runConsent: ConsentRunner;
   private clock: () => number;
+  private accessToken: string | null = null;
+  private expiresAt = 0;
+  private refreshToken: string | null | undefined;
 
   constructor(deps: {
     http: HttpClient;
@@ -188,33 +191,63 @@ export class OAuthAuthenticator implements Authenticator {
       this.http,
       this.clock(),
     );
-    if (tokens.refreshToken) await this.secrets.set(REFRESH_KEY, tokens.refreshToken);
+    this.accessToken = tokens.accessToken;
+    this.expiresAt = tokens.expiresAt;
+    if (tokens.refreshToken) {
+      this.refreshToken = tokens.refreshToken;
+      await this.secrets.set(REFRESH_KEY, tokens.refreshToken);
+    }
     await this.secrets.set(ACCESS_KEY, tokens.accessToken);
     await this.secrets.set(EXPIRY_KEY, String(tokens.expiresAt));
   }
 
-  async isAuthed(): Promise<boolean> {
-    return (await this.secrets.get(REFRESH_KEY)) !== null;
+  private async loadRefreshToken(): Promise<string | null> {
+    if (this.refreshToken === undefined) {
+      this.refreshToken = await this.secrets.get(REFRESH_KEY);
+    }
+    return this.refreshToken;
   }
 
-  async getAccessToken(): Promise<string> {
-    const access = await this.secrets.get(ACCESS_KEY);
-    const expiry = Number((await this.secrets.get(EXPIRY_KEY)) ?? '0');
-    if (access && this.clock() < expiry - 60_000) return access;
+  async isAuthed(): Promise<boolean> {
+    return (await this.loadRefreshToken()) !== null;
+  }
 
-    const refresh = await this.secrets.get(REFRESH_KEY);
+  // The access token is cached in memory so the OS keychain is read at most
+  // once per session, instead of on every Gmail request (which would otherwise
+  // trigger a macOS keychain-access prompt each time).
+  async getAccessToken(): Promise<string> {
+    if (this.accessToken && this.clock() < this.expiresAt - 60_000) {
+      return this.accessToken;
+    }
+
+    if (!this.accessToken) {
+      const stored = await this.secrets.get(ACCESS_KEY);
+      const expiry = Number((await this.secrets.get(EXPIRY_KEY)) ?? '0');
+      if (stored && this.clock() < expiry - 60_000) {
+        this.accessToken = stored;
+        this.expiresAt = expiry;
+        return stored;
+      }
+    }
+
+    const refresh = await this.loadRefreshToken();
     if (!refresh) throw new Error('Not authenticated');
     const tokens = await refreshAccessToken(
       { refreshToken: refresh, clientId: this.config.clientId, clientSecret: this.config.clientSecret },
       this.http,
       this.clock(),
     );
+    this.accessToken = tokens.accessToken;
+    this.expiresAt = tokens.expiresAt;
     await this.secrets.set(ACCESS_KEY, tokens.accessToken);
     await this.secrets.set(EXPIRY_KEY, String(tokens.expiresAt));
     return tokens.accessToken;
   }
 
   async disconnect(): Promise<void> {
+    this.accessToken = null;
+    this.expiresAt = 0;
+    this.refreshToken = null;
     await this.secrets.delete(REFRESH_KEY);
     await this.secrets.delete(ACCESS_KEY);
     await this.secrets.delete(EXPIRY_KEY);

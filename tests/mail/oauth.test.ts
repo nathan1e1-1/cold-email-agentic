@@ -133,4 +133,31 @@ describe('oauth', () => {
     });
     await expect(auth.getAccessToken()).rejects.toThrow(/Not authenticated/);
   });
+
+  it('caches the access token so the keychain is not read per request', async () => {
+    let reads = 0;
+    const secrets: SecretStore = {
+      get: async (key) => {
+        reads += 1;
+        const store: Record<string, string> = {
+          'gmail.access_token': 'AT',
+          'gmail.access_expires_at': String(Date.now() + 3_600_000),
+        };
+        return store[key] ?? null;
+      },
+      set: async () => {},
+      delete: async () => {},
+    };
+    const auth = new OAuthAuthenticator({
+      http: new FakeHttpClient(),
+      secrets,
+      config: { clientId: 'cid', redirectUri: 'r' },
+      runConsent: async () => ({ code: 'c' }),
+    });
+    expect(await auth.getAccessToken()).toBe('AT');
+    const afterFirst = reads;
+    expect(afterFirst).toBeGreaterThan(0);
+    expect(await auth.getAccessToken()).toBe('AT');
+    expect(reads).toBe(afterFirst);
+  });
 });
