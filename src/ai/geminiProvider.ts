@@ -2,10 +2,10 @@ import type { HttpClient } from '../mail/httpClient';
 import type { AiDescriptor, AiProvider, GenerateRequest } from './aiProvider';
 import { buildSystemPrompt, buildUserPrompt } from './prompt';
 import { cleanDraft } from './sanitize';
+import { MAX_RETRY_WAIT_MS, parseRetryDelayMs } from './retry';
 
 const HOST = 'generativelanguage.googleapis.com';
 const MODEL = 'gemini-3.8-flash';
-const RETRYABLE_STATUSES = new Set([500, 502, 503]);
 
 interface GeminiResponse {
   candidates?: { content?: { parts?: { text?: string }[] } }[];
@@ -46,6 +46,21 @@ export class GeminiProvider implements AiProvider {
     this.sleep = deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
   }
 
+  // Returns how long to wait before retrying, or null to stop and surface the response.
+  // 429 (rate limit) is retryable when the server's hint is short (per-minute limits);
+  // a huge hint (daily/quota exhausted) fails fast so the caller can fall back.
+  private retryDelay(res: { status: number; body: string }, attempt: number): number | null {
+    if (res.status === 429) {
+      const hinted = parseRetryDelayMs(res.body);
+      if (hinted !== null) return hinted <= MAX_RETRY_WAIT_MS ? hinted : null;
+      return Math.min(this.backoffMs * 2 ** attempt, MAX_RETRY_WAIT_MS);
+    }
+    if (res.status === 500 || res.status === 502 || res.status === 503) {
+      return Math.min(this.backoffMs * 2 ** attempt, MAX_RETRY_WAIT_MS);
+    }
+    return null;
+  }
+
   async generate(req: GenerateRequest): Promise<string> {
     const system = buildSystemPrompt({ tone: req.tone, signature: req.signature });
     const user = buildUserPrompt({
@@ -68,8 +83,9 @@ export class GeminiProvider implements AiProvider {
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': this.apiKey },
         body,
       });
-      if (RETRYABLE_STATUSES.has(res.status) && attempt < this.maxRetries) {
-        await this.sleep(this.backoffMs * 2 ** attempt);
+      const delay = attempt < this.maxRetries ? this.retryDelay(res, attempt) : null;
+      if (delay !== null) {
+        await this.sleep(delay);
         continue;
       }
       return this.parseResponse(res);
