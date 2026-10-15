@@ -33,16 +33,24 @@ describe('prompt', () => {
     expect(s).toMatch(/placeholder/i);
   });
 
-  it('builds a delimited user prompt with subject and instruction', () => {
+  it('prefers a clarifying question over inventing commitments', () => {
+    const s = buildSystemPrompt({ tone: 'professional' });
+    expect(s).toMatch(/clarifying question/i);
+    expect(s).toMatch(/never commit/i);
+  });
+
+  it('builds a delimited user prompt with subject and guidance', () => {
     const u = buildUserPrompt({
       thread: thread([msg('m1', 'inbound', 'Hello there')]),
       tone: 'professional',
       instruction: 'make it shorter',
     });
-    expect(u).toContain('Thread subject: Q3 partnership');
+    expect(u).toContain('Subject: Q3 partnership');
+    expect(u).toContain('<thread>');
     expect(u).toContain('<<<MESSAGE from Sarah>>>');
     expect(u).toContain('Hello there');
-    expect(u).toContain('Additional instruction from the user: make it shorter');
+    expect(u).toContain('<user_guidance>');
+    expect(u).toContain('make it shorter');
     expect(u).toContain('Draft the reply body now.');
   });
 
@@ -52,7 +60,7 @@ describe('prompt', () => {
       tone: 'direct',
       priorDraft: 'old draft text',
     });
-    expect(u).toContain('Previous draft to revise:');
+    expect(u).toContain('<prior_draft>');
     expect(u).toContain('old draft text');
   });
 
