@@ -37,6 +37,7 @@ export interface Repository {
 
   upsertContact(c: Omit<Contact, 'id'>): Promise<Contact>;
   getContactByEmail(email: string): Promise<Contact | null>;
+  listContacts(): Promise<Contact[]>;
   setDoNotContact(email: string, value: boolean): Promise<void>;
 
   createDraft(d: Omit<Draft, 'id' | 'isChosen'>): Promise<Draft>;

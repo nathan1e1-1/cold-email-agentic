@@ -9,13 +9,8 @@ import { appConfig } from './appConfig';
 import { GmailMailboxAdapter } from './gmailMailboxAdapter';
 import { keychainSecretStore } from './keychainSecretStore';
 import type { MailboxProvider } from './mailbox';
-import { MockMailboxProvider } from './mockMailbox';
 
-export type MailboxMode = 'mock' | 'gmail';
-
-export async function createMailboxProvider(mode: MailboxMode): Promise<MailboxProvider> {
-  if (mode === 'mock') return new MockMailboxProvider();
-
+export async function createMailboxProvider(): Promise<MailboxProvider> {
   const cfg = await appConfig();
   if (!cfg.googleClientId) throw new Error('Add your Google Client ID in Settings (gear icon)');
 
@@ -40,10 +35,13 @@ export async function createMailboxProvider(mode: MailboxMode): Promise<MailboxP
 export async function createAiProvider(): Promise<AiProvider> {
   const cfg = await appConfig();
   const http = new TauriHttpClient();
+  if (cfg.aiProvider === 'gemini' && cfg.geminiApiKey) {
+    return new GeminiProvider({ http, apiKey: cfg.geminiApiKey });
+  }
   if (cfg.aiProvider === 'groq' && cfg.groqApiKey) {
     return new GroqProvider({ http, apiKey: cfg.groqApiKey });
   }
-  if (cfg.geminiApiKey) return new GeminiProvider({ http, apiKey: cfg.geminiApiKey });
   if (cfg.groqApiKey) return new GroqProvider({ http, apiKey: cfg.groqApiKey });
+  if (cfg.geminiApiKey) return new GeminiProvider({ http, apiKey: cfg.geminiApiKey });
   throw new Error('Add a Gemini or Groq API key in Settings (gear icon)');
 }

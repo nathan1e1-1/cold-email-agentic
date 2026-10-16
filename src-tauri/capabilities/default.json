@@ -18,6 +18,8 @@
       ]
     },
     "oauth:allow-start",
-    "oauth:allow-cancel"
+    "oauth:allow-cancel",
+    "sql:default",
+    "sql:allow-execute"
   ]
 }

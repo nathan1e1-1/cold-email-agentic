@@ -2,6 +2,8 @@ export interface StoredSettings {
   googleClientId: string;
   redirectUri: string;
   aiProvider: 'gemini' | 'groq';
+  mailingAddress: string;
+  unsubscribeLine: string;
 }
 
 export const SECRET_KEYS = {
@@ -15,7 +17,9 @@ const STORAGE_KEY = 'coldemailagentic.settings';
 const DEFAULTS: StoredSettings = {
   googleClientId: '',
   redirectUri: 'http://127.0.0.1:8765',
-  aiProvider: 'gemini',
+  aiProvider: 'groq',
+  mailingAddress: '',
+  unsubscribeLine: 'If you would rather not hear from me, just reply "unsubscribe".',
 };
 
 export function loadSettings(): StoredSettings {

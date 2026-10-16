@@ -38,5 +38,10 @@
     "android": {
       "debugApplicationIdSuffix": ".debug"
     }
+  },
+  "plugins": {
+    "sql": {
+      "preload": ["sqlite:coldemailagentic.db"]
+    }
   }
 }

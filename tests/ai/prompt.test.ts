@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   buildSystemPrompt, buildUserPrompt, selectContextMessages, MAX_CONTEXT_MESSAGES,
+  buildPromptPack, parseColdDraft,
 } from '../../src/ai/prompt';
 import type { Direction, Message, Thread } from '../../src/domain/types';
 
@@ -33,16 +34,24 @@ describe('prompt', () => {
     expect(s).toMatch(/placeholder/i);
   });
 
-  it('builds a delimited user prompt with subject and instruction', () => {
+  it('prefers a clarifying question over inventing commitments', () => {
+    const s = buildSystemPrompt({ tone: 'professional' });
+    expect(s).toMatch(/clarifying question/i);
+    expect(s).toMatch(/never commit/i);
+  });
+
+  it('builds a delimited user prompt with subject and guidance', () => {
     const u = buildUserPrompt({
       thread: thread([msg('m1', 'inbound', 'Hello there')]),
       tone: 'professional',
       instruction: 'make it shorter',
     });
-    expect(u).toContain('Thread subject: Q3 partnership');
+    expect(u).toContain('Subject: Q3 partnership');
+    expect(u).toContain('<thread>');
     expect(u).toContain('<<<MESSAGE from Sarah>>>');
     expect(u).toContain('Hello there');
-    expect(u).toContain('Additional instruction from the user: make it shorter');
+    expect(u).toContain('<user_guidance>');
+    expect(u).toContain('make it shorter');
     expect(u).toContain('Draft the reply body now.');
   });
 
@@ -52,7 +61,7 @@ describe('prompt', () => {
       tone: 'direct',
       priorDraft: 'old draft text',
     });
-    expect(u).toContain('Previous draft to revise:');
+    expect(u).toContain('<prior_draft>');
     expect(u).toContain('old draft text');
   });
 
@@ -67,5 +76,30 @@ describe('prompt', () => {
     const big = 'x'.repeat(3000);
     const selected = selectContextMessages([msg('m1', 'inbound', big), msg('m2', 'inbound', big)], 5, 4000);
     expect(selected.map((m) => m.id)).toEqual(['m2']);
+  });
+
+  it('builds a cold prompt with the contact context and asks for a subject', () => {
+    const pack = buildPromptPack({
+      mode: 'cold',
+      contact: { name: 'Dana', email: 'dana@acme.com', notes: 'met at the AI meetup' },
+      ownEmail: 'me@x.com',
+      tone: 'professional',
+    });
+    expect(pack.system).toMatch(/cold outreach/i);
+    expect(pack.system).toMatch(/Subject:/);
+    expect(pack.user).toContain('<contact>');
+    expect(pack.user).toContain('dana@acme.com');
+    expect(pack.user).toContain('met at the AI meetup');
+  });
+
+  it('parses a cold draft into subject and body', () => {
+    expect(parseColdDraft('Subject: Quick question\n\nHi Dana, want to chat?')).toEqual({
+      subject: 'Quick question',
+      body: 'Hi Dana, want to chat?',
+    });
+  });
+
+  it('falls back to body-only when there is no subject line', () => {
+    expect(parseColdDraft('Just a body')).toEqual({ subject: null, body: 'Just a body' });
   });
 });

@@ -91,15 +91,26 @@ describe('GeminiProvider', () => {
     expect(http.requests.length).toBe(3);
   });
 
-  it('does not retry a 429 quota error', async () => {
+  it('does not retry a 429 with a long retry delay (quota exhausted)', async () => {
     const http = new FakeHttpClient().queueResponse({
       status: 429,
-      body: JSON.stringify({ error: { message: 'quota exceeded', status: 'RESOURCE_EXHAUSTED' } }),
+      body: JSON.stringify({ error: { message: 'quota exceeded', status: 'RESOURCE_EXHAUSTED' }, details: [{ retryDelay: '3600s' }] }),
     });
     await expect(
       new GeminiProvider({ http, apiKey: 'K', sleep: async () => {} }).generate({ thread, ownEmail: 'me@x.com', tone: 'direct' }),
     ).rejects.toThrow(/quota exceeded/);
     expect(http.requests.length).toBe(1);
+  });
+
+  it('retries a 429 with a short retry delay', async () => {
+    const delays: number[] = [];
+    const http = new FakeHttpClient()
+      .queueResponse({ status: 429, body: JSON.stringify({ error: { message: 'rate limited' }, details: [{ retryDelay: '5s' }] }) })
+      .queueResponse({ status: 200, body: JSON.stringify({ candidates: [{ content: { parts: [{ text: 'ok' }] } }] }) });
+    const provider = new GeminiProvider({ http, apiKey: 'K', sleep: async (ms) => { delays.push(ms); } });
+    expect(await provider.generate({ thread, ownEmail: 'me@x.com', tone: 'direct' })).toBe('ok');
+    expect(http.requests.length).toBe(2);
+    expect(delays).toEqual([5000]);
   });
 
   it('does not retry a non-retryable error', async () => {

@@ -7,8 +7,16 @@ export interface AiDescriptor {
   host: string;
 }
 
+export interface ContactContext {
+  name?: string;
+  email: string;
+  notes?: string;
+}
+
 export interface GenerateRequest {
-  thread: Thread;
+  thread?: Thread;
+  contact?: ContactContext;
+  mode?: 'reply' | 'cold';
   ownEmail: string;
   tone: TonePreset;
   instruction?: string;

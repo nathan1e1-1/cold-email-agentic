@@ -2,9 +2,14 @@ const KEYRING_SERVICE: &str = "com.nthnp.coldemailagentic";
 
 #[tauri::command]
 fn secret_set(key: String, value: String) -> Result<(), String> {
-  keyring::Entry::new(KEYRING_SERVICE, &key)
-    .and_then(|entry| entry.set_password(&value))
-    .map_err(|err| err.to_string())
+  let entry = keyring::Entry::new(KEYRING_SERVICE, &key).map_err(|err| err.to_string())?;
+  // macOS Keychain rejects a duplicate item, so clear any existing entry first.
+  match entry.delete_credential() {
+    Ok(()) => {}
+    Err(keyring::Error::NoEntry) => {}
+    Err(err) => return Err(err.to_string()),
+  }
+  entry.set_password(&value).map_err(|err| err.to_string())
 }
 
 #[tauri::command]
@@ -37,6 +42,7 @@ pub fn run() {
     .plugin(tauri_plugin_http::init())
     .plugin(tauri_plugin_oauth::init())
     .plugin(tauri_plugin_opener::init())
+    .plugin(tauri_plugin_sql::Builder::default().build())
     .invoke_handler(tauri::generate_handler![secret_set, secret_get, secret_delete])
     .setup(|app| {
       if cfg!(debug_assertions) {
