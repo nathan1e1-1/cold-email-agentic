@@ -18,7 +18,8 @@ With your authorization, the app connects to your Google account and:
 - Email data is stored **locally on your device** (SQLite) and drafts are stored
   locally too. The project operates **no servers** and does not collect or transmit
   your data to the maintainers.
-- OAuth tokens are stored in the **macOS Keychain**. They are never logged or shared.
+- OAuth tokens and API keys are stored **locally on your device** in a file readable only by
+  your user account (`0600` permissions). They are never logged or shared.
 
 ## Third parties
 

@@ -40,7 +40,7 @@ export function SettingsView({ repo, onSaved }: { repo: Repository | null; onSav
   return (
     <div className="view">
       <h1 className="view-title">Settings</h1>
-      <p className="view-sub">Credentials and cold-email guardrails. Secrets are stored in the macOS Keychain.</p>
+      <p className="view-sub">Credentials and cold-email guardrails. Secrets are stored locally in a 0600 file on this Mac.</p>
 
       <div className="card settings-card">
         <div className="card-head"><span className="card-title">Gmail</span></div>
@@ -53,7 +53,7 @@ export function SettingsView({ repo, onSaved }: { repo: Repository | null; onSav
           />
         </label>
         <label className="field">
-          <span>Google Client Secret <em>· Keychain, leave blank to keep</em></span>
+          <span>Google Client Secret <em>· stored locally, leave blank to keep</em></span>
           <input type="password" value={clientSecret} onChange={(e) => setClientSecret(e.target.value)} placeholder="GOCSPX-…" />
         </label>
         <label className="field">
@@ -75,11 +75,11 @@ export function SettingsView({ repo, onSaved }: { repo: Repository | null; onSav
           </select>
         </label>
         <label className="field">
-          <span>Groq API key <em>· Keychain, leave blank to keep</em></span>
+          <span>Groq API key <em>· stored locally, leave blank to keep</em></span>
           <input type="password" value={groqKey} onChange={(e) => setGroqKey(e.target.value)} placeholder="gsk_…" />
         </label>
         <label className="field">
-          <span>Gemini API key <em>· Keychain, optional</em></span>
+          <span>Gemini API key <em>· stored locally, optional</em></span>
           <input type="password" value={geminiKey} onChange={(e) => setGeminiKey(e.target.value)} placeholder="AIza…" />
         </label>
       </div>
