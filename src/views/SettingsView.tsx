@@ -85,6 +85,18 @@ export function SettingsView({ repo, onSaved }: { repo: Repository | null; onSav
       </div>
 
       <div className="card settings-card">
+        <div className="card-head"><span className="card-title">Writing</span></div>
+        <label className="field">
+          <span>Signature <em>· appended to generated drafts</em></span>
+          <input
+            value={settings.signature}
+            onChange={(e) => setSettings({ ...settings, signature: e.target.value })}
+            placeholder="— Nathan"
+          />
+        </label>
+      </div>
+
+      <div className="card settings-card">
         <div className="card-head"><span className="card-title">Cold-email guardrails</span></div>
         <label className="field">
           <span>Mailing address <em>· required to cold email</em></span>

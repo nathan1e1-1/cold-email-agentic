@@ -1,6 +1,6 @@
 import type { Account, Message, Thread } from '../domain/types';
 import type { MailProvider } from '../mail/mailProvider';
-import type { MailboxProvider, NewEmailInput } from './mailbox';
+import type { MailboxProvider, NewEmailInput, ThreadPage } from './mailbox';
 
 export type MailProviderFactory = (ownEmail: string) => MailProvider;
 
@@ -36,9 +36,11 @@ export class GmailMailboxAdapter implements MailboxProvider {
     return this.provider;
   }
 
-  async listThreads(): Promise<Thread[]> {
-    const { threads } = await this.requireProvider().listThreads({ sinceDays: 90, cap: 20 });
-    return threads;
+  async listThreads(opts?: { pageToken?: string }): Promise<ThreadPage> {
+    const { threads, nextPageToken } = await this.requireProvider().listThreads({
+      sinceDays: 90, cap: 20, pageToken: opts?.pageToken,
+    });
+    return { threads, nextPageToken: nextPageToken ?? null };
   }
 
   async getThread(id: string): Promise<Thread | null> {

@@ -13,9 +13,12 @@ interface Props {
   threads: Thread[]
   selectedId: string | null
   onSelect: (id: string) => void
+  hasMore: boolean
+  loadingMore: boolean
+  onLoadMore: () => void
 }
 
-export function ThreadList({ threads, selectedId, onSelect }: Props) {
+export function ThreadList({ threads, selectedId, onSelect, hasMore, loadingMore, onLoadMore }: Props) {
   const [query, setQuery] = useState('')
   const q = query.trim().toLowerCase()
   const visible = q
@@ -64,6 +67,13 @@ export function ThreadList({ threads, selectedId, onSelect }: Props) {
           )
         })}
       </ul>
+      {hasMore && (
+        <div className="load-more">
+          <button type="button" className="chip ghost" disabled={loadingMore} onClick={onLoadMore}>
+            {loadingMore ? 'Loading…' : 'Load more'}
+          </button>
+        </div>
+      )}
     </aside>
   )
 }

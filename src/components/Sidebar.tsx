@@ -1,7 +1,7 @@
 import type { Account, TonePreset } from '../domain/types'
 import { formatDate } from '../lib/format'
 
-export type View = 'outreach' | 'inbox' | 'dashboard' | 'settings'
+export type View = 'outreach' | 'board' | 'inbox' | 'dashboard' | 'settings'
 
 export interface ActivityItem {
   id: number
@@ -22,6 +22,15 @@ function NavIcon({ name }: { name: View }) {
     strokeWidth: 1.8,
     strokeLinecap: 'round' as const,
     strokeLinejoin: 'round' as const,
+  }
+  if (name === 'board') {
+    return (
+      <svg {...common} aria-hidden="true">
+        <rect x="3" y="4" width="5" height="16" rx="1.5" />
+        <rect x="9.5" y="4" width="5" height="10" rx="1.5" />
+        <rect x="16" y="4" width="5" height="13" rx="1.5" />
+      </svg>
+    )
   }
   if (name === 'outreach') {
     return (
@@ -79,6 +88,7 @@ function Chevron({ collapsed }: { collapsed: boolean }) {
 
 const NAV: { id: View; label: string }[] = [
   { id: 'outreach', label: 'Outreach' },
+  { id: 'board', label: 'Board' },
   { id: 'inbox', label: 'Inbox' },
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'settings', label: 'Settings' },

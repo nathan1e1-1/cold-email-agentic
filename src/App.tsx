@@ -9,6 +9,9 @@ import { Sidebar, type ActivityItem, type View } from './components/Sidebar'
 import { DashboardView } from './views/DashboardView'
 import { SettingsView } from './views/SettingsView'
 import { OutreachView } from './views/OutreachView'
+import { BoardView } from './views/BoardView'
+import { ensureCardForThread } from './services/kanban'
+import { loadSettings } from './services/appSettings'
 import { getRepository } from './db/repositoryFactory'
 import type { Repository } from './db/repository'
 import { ThreadList } from './components/ThreadList'
@@ -17,6 +20,7 @@ import { DraftPanel } from './components/DraftPanel'
 
 const VIEW_TITLE: Record<View, string> = {
   outreach: 'Outreach',
+  board: 'Board',
   inbox: 'Inbox',
   dashboard: 'Dashboard',
   settings: 'Settings',
@@ -32,14 +36,27 @@ function loadCollapsed(): boolean {
   }
 }
 
+async function persistThreads(r: Repository, acc: Account, list: Thread[]): Promise<void> {
+  const accountRow = await r.upsertAccount({
+    provider: 'gmail', email: acc.email, ownEmail: acc.ownEmail, tokenRef: 'gmail', createdAt: Date.now(),
+  })
+  for (const thread of list) {
+    const saved = await r.upsertThread({ ...thread, accountId: accountRow.rowId })
+    for (const message of thread.messages) await r.upsertMessage(saved.rowId, message)
+    await ensureCardForThread(r, saved.rowId)
+  }
+}
+
 function App() {
   const [view, setView] = useState<View>('outreach')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(loadCollapsed)
   const [repo, setRepo] = useState<Repository | null>(null)
+  const [boardVersion, setBoardVersion] = useState(0)
   const [mailbox, setMailbox] = useState<MailboxProvider | null>(null)
   const [ai, setAi] = useState<AiProvider | null>(null)
   const [account, setAccount] = useState<Account | null>(null)
   const [threads, setThreads] = useState<Thread[]>([])
+  const [nextPageToken, setNextPageToken] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [selected, setSelected] = useState<Thread | null>(null)
@@ -50,6 +67,7 @@ function App() {
   const [draftsThisSession, setDraftsThisSession] = useState(0)
   const [activity, setActivity] = useState<ActivityItem[]>([])
   const [testMode, setTestMode] = useState(true)
+  const [signature, setSignature] = useState(() => loadSettings().signature)
   const [status, setStatus] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const startedRef = useRef(false)
@@ -78,13 +96,13 @@ function App() {
       acc: Account,
       thread: Thread,
       nextTone: TonePreset,
-      opts: { instruction?: string; priorDraft?: string } = {},
+      opts: { instruction?: string; priorDraft?: string; signature?: string } = {},
     ) => {
       setGenerating(true); setError(null); setStatus(null)
       try {
         setDraft(await aiProvider.generate({
           thread, ownEmail: acc.ownEmail, tone: nextTone,
-          instruction: opts.instruction, priorDraft: opts.priorDraft,
+          instruction: opts.instruction, priorDraft: opts.priorDraft, signature: opts.signature,
         }))
         setDraftsThisSession((n) => n + 1)
         pushActivity({ kind: 'draft', subject: thread.subject, tone: nextTone, at: Date.now(), threadId: thread.id })
@@ -122,9 +140,18 @@ function App() {
       }
       setMailbox(box); setAi(aiProvider); setAccount(acc)
       setBusy('Loading threads…')
-      const list = await box.listThreads()
+      const { threads: list, nextPageToken: token } = await box.listThreads()
       setThreads(list)
+      setNextPageToken(token)
       setBusy(null)
+      try {
+        const r = await getRepository()
+        setRepo(r)
+        await persistThreads(r, acc, list)
+        setBoardVersion((v) => v + 1)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err))
+      }
       if (list.length > 0) await openThread(box, list[0].id)
     } catch (err) {
       setBusy(null)
@@ -157,7 +184,7 @@ function App() {
       const sent = await mailbox.send(selected.id, draft.trim())
       setStatus(`Sent to ${sent.to.map((a) => a.email).join(', ')}`)
       pushActivity({ kind: 'sent', subject: selected.subject, tone, at: Date.now(), threadId: selected.id })
-      setThreads(await mailbox.listThreads())
+      setThreads((await mailbox.listThreads()).threads)
       setSelected(await mailbox.getThread(selected.id))
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -169,16 +196,35 @@ function App() {
       void generate(ai, account, selected, tone, {
         instruction: instruction || undefined,
         priorDraft: draft || undefined,
+        signature: signature || undefined,
       })
     }
-  }, [selected, ai, account, tone, instruction, draft, generate])
+  }, [selected, ai, account, tone, instruction, draft, signature, generate])
+
+  const loadMore = useCallback(async () => {
+    if (!mailbox || !nextPageToken) return
+    setBusy('Loading more…')
+    try {
+      const page = await mailbox.listThreads({ pageToken: nextPageToken })
+      setThreads((prev) => [...prev, ...page.threads])
+      setNextPageToken(page.nextPageToken)
+      if (repo && account) {
+        await persistThreads(repo, account, page.threads)
+        setBoardVersion((v) => v + 1)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusy(null)
+    }
+  }, [mailbox, nextPageToken, repo, account])
 
   const promptText = useMemo(() => {
     if (!selected) return null
-    const system = buildSystemPrompt({ tone })
+    const system = buildSystemPrompt({ tone, signature: signature || undefined })
     const user = buildUserPrompt({ thread: selected, tone, instruction: instruction || undefined })
     return `SYSTEM\n${system}\n\nUSER\n${user}`
-  }, [selected, tone, instruction])
+  }, [selected, tone, instruction, signature])
 
   const recipient = useMemo(() => {
     if (!selected) return ''
@@ -234,9 +280,14 @@ function App() {
               mailbox={mailbox}
               repo={repo}
               ownEmail={account?.ownEmail ?? ''}
+              signature={signature}
               testMode={testMode}
               onSent={onColdSent}
             />
+          )}
+
+          {view === 'board' && (
+            <BoardView repo={repo} onOpenThread={openThreadById} refreshKey={boardVersion} />
           )}
 
           {view === 'dashboard' && (
@@ -259,6 +310,9 @@ function App() {
                 threads={threads}
                 selectedId={selectedId}
                 onSelect={(id) => { if (mailbox) void openThread(mailbox, id) }}
+                hasMore={nextPageToken !== null}
+                loadingMore={busy === 'Loading more…'}
+                onLoadMore={() => void loadMore()}
               />
               <section className="reader">
                 {selected ? (
@@ -291,7 +345,9 @@ function App() {
             </div>
           )}
 
-          {view === 'settings' && <SettingsView repo={repo} onSaved={() => void connect()} />}
+          {view === 'settings' && (
+            <SettingsView repo={repo} onSaved={() => { setSignature(loadSettings().signature); void connect() }} />
+          )}
         </div>
       </div>
     </div>

@@ -7,10 +7,15 @@ export interface NewEmailInput {
   listUnsubscribeMailto?: string;
 }
 
+export interface ThreadPage {
+  threads: Thread[];
+  nextPageToken: string | null;
+}
+
 export interface MailboxProvider {
   connect(): Promise<Account>;
   isConnected(): boolean;
-  listThreads(): Promise<Thread[]>;
+  listThreads(opts?: { pageToken?: string }): Promise<ThreadPage>;
   getThread(id: string): Promise<Thread | null>;
   send(threadId: string, body: string): Promise<Message>;
   sendNew(input: NewEmailInput): Promise<Message>;

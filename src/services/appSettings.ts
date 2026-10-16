@@ -4,6 +4,7 @@ export interface StoredSettings {
   aiProvider: 'gemini' | 'groq';
   mailingAddress: string;
   unsubscribeLine: string;
+  signature: string;
 }
 
 export const SECRET_KEYS = {
@@ -20,6 +21,7 @@ const DEFAULTS: StoredSettings = {
   aiProvider: 'groq',
   mailingAddress: '',
   unsubscribeLine: 'If you would rather not hear from me, just reply "unsubscribe".',
+  signature: '',
 };
 
 export function loadSettings(): StoredSettings {

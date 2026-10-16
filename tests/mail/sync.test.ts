@@ -25,7 +25,7 @@ function fakeProvider(overrides: Partial<MailProvider> = {}): MailProvider {
     auth: async () => {},
     isAuthed: async () => true,
     getProfile: async () => ({ emailAddress: 'me@x.com', historyId: '999' }),
-    listThreads: async () => ({ threads: [makeThread('t1', '100'), makeThread('t2', '100')], seededHistoryId: '999' }),
+    listThreads: async () => ({ threads: [makeThread('t1', '100'), makeThread('t2', '100')], seededHistoryId: '999', nextPageToken: null }),
     getThread: async (id) => makeThread(id, '100'),
     getThreadsByIds: async (ids) => ids.map((id) => makeThread(id, '1000')),
     listHistoryChanges: async () => ({ changedThreadIds: [], deletedThreadIds: [], nextHistoryId: '1000', expired: false }),
@@ -97,7 +97,7 @@ describe('syncMailbox', () => {
     const repo = new NodeRepository(':memory:');
     await seedAccount(repo, null);
     const provider = fakeProvider({
-      listThreads: async () => ({ threads: [makeThread('t1', '100', 'outbound')], seededHistoryId: '999' }),
+      listThreads: async () => ({ threads: [makeThread('t1', '100', 'outbound')], seededHistoryId: '999', nextPageToken: null }),
     });
     await syncMailbox(repo, provider);
     const thr = await repo.getThreadByProviderId('t1');
