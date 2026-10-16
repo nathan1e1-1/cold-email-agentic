@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { NodeRepository } from '../../src/db/nodeRepository';
 import {
   ensureCardForThread, moveCard, reopenOnInbound, markSentReconciled,
-  computeDirection, reconcile, applyReconcile,
+  computeDirection, reconcile, applyReconcile, groupCardsByStatus,
 } from '../../src/services/kanban';
 
 async function setup() {
@@ -78,5 +78,18 @@ describe('kanban', () => {
     await ensureCardForThread(repo, threadRowId);
     await applyReconcile(repo, threadRowId, 'outbound');
     expect((await repo.getCardByThread(threadRowId))?.status).toBe('sent');
+  });
+});
+
+describe('groupCardsByStatus', () => {
+  it('groups by status, ordered by position then id', () => {
+    const groups = groupCardsByStatus([
+      { id: 1, threadRowId: 1, status: 'untouched', position: 2, updatedAt: 0 },
+      { id: 2, threadRowId: 2, status: 'untouched', position: 0, updatedAt: 0 },
+      { id: 3, threadRowId: 3, status: 'sent', position: 0, updatedAt: 0 },
+    ]);
+    expect(groups.untouched.map((c) => c.id)).toEqual([2, 1]);
+    expect(groups.sent.map((c) => c.id)).toEqual([3]);
+    expect(groups.review).toEqual([]);
   });
 });

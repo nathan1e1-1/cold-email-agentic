@@ -1,5 +1,5 @@
 import type { Repository } from '../db/repository';
-import type { Address, Card, CardStatus, Direction } from '../domain/types';
+import { CARD_STATUSES, type Address, type Card, type CardStatus, type Direction } from '../domain/types';
 
 export function computeDirection(from: Address, ownEmail: string): Direction {
   return from.email.trim().toLowerCase() === ownEmail.trim().toLowerCase() ? 'outbound' : 'inbound';
@@ -42,4 +42,13 @@ export async function markSentReconciled(repo: Repository, cardId: number, now =
 
 export async function reopenOnInbound(repo: Repository, threadRowId: number, now = Date.now()): Promise<void> {
   await applyReconcile(repo, threadRowId, 'inbound', now);
+}
+
+export function groupCardsByStatus(cards: Card[]): Record<CardStatus, Card[]> {
+  const groups: Record<CardStatus, Card[]> = { untouched: [], review: [], sent: [] };
+  for (const card of cards) groups[card.status].push(card);
+  for (const status of CARD_STATUSES) {
+    groups[status].sort((a, b) => a.position - b.position || a.id - b.id);
+  }
+  return groups;
 }

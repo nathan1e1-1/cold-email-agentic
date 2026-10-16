@@ -9,6 +9,8 @@ import { Sidebar, type ActivityItem, type View } from './components/Sidebar'
 import { DashboardView } from './views/DashboardView'
 import { SettingsView } from './views/SettingsView'
 import { OutreachView } from './views/OutreachView'
+import { BoardView } from './views/BoardView'
+import { ensureCardForThread } from './services/kanban'
 import { getRepository } from './db/repositoryFactory'
 import type { Repository } from './db/repository'
 import { ThreadList } from './components/ThreadList'
@@ -17,6 +19,7 @@ import { DraftPanel } from './components/DraftPanel'
 
 const VIEW_TITLE: Record<View, string> = {
   outreach: 'Outreach',
+  board: 'Board',
   inbox: 'Inbox',
   dashboard: 'Dashboard',
   settings: 'Settings',
@@ -36,6 +39,7 @@ function App() {
   const [view, setView] = useState<View>('outreach')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(loadCollapsed)
   const [repo, setRepo] = useState<Repository | null>(null)
+  const [boardVersion, setBoardVersion] = useState(0)
   const [mailbox, setMailbox] = useState<MailboxProvider | null>(null)
   const [ai, setAi] = useState<AiProvider | null>(null)
   const [account, setAccount] = useState<Account | null>(null)
@@ -125,6 +129,22 @@ function App() {
       const list = await box.listThreads()
       setThreads(list)
       setBusy(null)
+      try {
+        const r = await getRepository()
+        setRepo(r)
+        const accountRow = await r.upsertAccount({
+          provider: 'gmail', email: acc.email, ownEmail: acc.ownEmail,
+          tokenRef: 'gmail', createdAt: Date.now(),
+        })
+        for (const thread of list) {
+          const saved = await r.upsertThread({ ...thread, accountId: accountRow.rowId })
+          for (const message of thread.messages) await r.upsertMessage(saved.rowId, message)
+          await ensureCardForThread(r, saved.rowId)
+        }
+        setBoardVersion((v) => v + 1)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err))
+      }
       if (list.length > 0) await openThread(box, list[0].id)
     } catch (err) {
       setBusy(null)
@@ -237,6 +257,10 @@ function App() {
               testMode={testMode}
               onSent={onColdSent}
             />
+          )}
+
+          {view === 'board' && (
+            <BoardView repo={repo} onOpenThread={openThreadById} refreshKey={boardVersion} />
           )}
 
           {view === 'dashboard' && (
