@@ -1,32 +1,55 @@
-# React + TypeScript + Vite
+# ColdEmailAgentic
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+A local, single-user macOS desktop app for **cold outreach and inbox triage**, with an AI
+agent that drafts the emails.
 
-Currently, two official plugins are available:
+- **Outreach** — add a contact (name, email, one line of context), and the agent drafts a
+  first-touch email (subject + body) you can regenerate and tune before sending.
+- **Board** — drag threads between *Haven't touched / In review / Sent* (persisted locally).
+- **Inbox** — read threads like a real mail client and draft replies with tone chips and a
+  nudge/regenerate loop.
+- **Compliance guardrails** — cold sends require a mailing address, honor opt-outs, are
+  rate-limited (25/day, 3/min), and carry a `mailto:` unsubscribe.
+- **Private & local** — email data lives in local SQLite; OAuth tokens live in the macOS
+  Keychain; no backend server.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Requirements
 
-## React Compiler
+- macOS (Apple Silicon), Node 20+, and the Rust toolchain (`rustup`).
+- A Google Cloud **OAuth Desktop client** (Gmail API enabled).
+- A free **Groq** key (default) and/or **Gemini** key for drafting.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Full click-by-click setup: **[docs/setup.md](docs/setup.md)**.
 
-## Expanding the Oxlint configuration
+## Develop
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm install
+npm run tauri dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Then open **Settings** in the app's sidebar and paste your Google Client ID / secret and AI
+key (or copy `.env.example` → `.env`).
+
+## Build
+
+```bash
+npm run tauri build
+```
+
+Produces an unsigned `.app` (and `.dmg`) under `src-tauri/target/release/bundle/`. Because
+it isn't signed/notarized, macOS Gatekeeper will warn on first launch — right-click → Open.
+
+## Test
+
+```bash
+npm test          # unit tests (Vitest)
+npm run typecheck # tsc -b
+npm run lint
+```
+
+The same checks run in CI on every pull request (`.github/workflows/ci.yml`).
+
+## License
+
+Personal project; no license file included.
