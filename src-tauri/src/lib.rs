@@ -1,39 +1,69 @@
-const KEYRING_SERVICE: &str = "com.nthnp.coldemailagentic";
+const KEYCHAIN_SERVICE: &str = "com.nthnp.coldemailagentic";
+
+#[cfg(target_os = "macos")]
+mod secrets {
+  use crate::KEYCHAIN_SERVICE;
+  use security_framework::os::macos::keychain::SecKeychain;
+
+  pub fn get(key: &str) -> Result<Option<String>, String> {
+    let keychain = SecKeychain::default().map_err(|err| err.to_string())?;
+    match keychain.find_generic_password(KEYCHAIN_SERVICE, key) {
+      Ok((password, _item)) => String::from_utf8(password.to_vec())
+        .map(Some)
+        .map_err(|err| err.to_string()),
+      Err(_) => Ok(None),
+    }
+  }
+
+  pub fn set(key: &str, value: &str) -> Result<(), String> {
+    let keychain = SecKeychain::default().map_err(|err| err.to_string())?;
+    // Updates the item in place (preserving its ACL / "Always Allow" grant)
+    // instead of deleting and re-adding it.
+    keychain
+      .set_generic_password(KEYCHAIN_SERVICE, key, value.as_bytes())
+      .map_err(|err| err.to_string())
+  }
+
+  pub fn delete(key: &str) -> Result<(), String> {
+    let keychain = SecKeychain::default().map_err(|err| err.to_string())?;
+    match keychain.find_generic_password(KEYCHAIN_SERVICE, key) {
+      Ok((_password, item)) => {
+        item.delete();
+        Ok(())
+      }
+      Err(_) => Ok(()),
+    }
+  }
+}
+
+#[cfg(not(target_os = "macos"))]
+mod secrets {
+  pub fn get(_key: &str) -> Result<Option<String>, String> {
+    Ok(None)
+  }
+
+  pub fn set(_key: &str, _value: &str) -> Result<(), String> {
+    Err("secure storage is only supported on macOS".into())
+  }
+
+  pub fn delete(_key: &str) -> Result<(), String> {
+    Ok(())
+  }
+}
 
 #[tauri::command]
 fn secret_set(key: String, value: String) -> Result<(), String> {
-  let entry = keyring::Entry::new(KEYRING_SERVICE, &key).map_err(|err| err.to_string())?;
-  // macOS Keychain rejects a duplicate item, so clear any existing entry first.
-  match entry.delete_credential() {
-    Ok(()) => {}
-    Err(keyring::Error::NoEntry) => {}
-    Err(err) => return Err(err.to_string()),
-  }
-  entry.set_password(&value).map_err(|err| err.to_string())
+  secrets::set(&key, &value)
 }
 
 #[tauri::command]
 fn secret_get(key: String) -> Result<Option<String>, String> {
-  match keyring::Entry::new(KEYRING_SERVICE, &key) {
-    Ok(entry) => match entry.get_password() {
-      Ok(value) => Ok(Some(value)),
-      Err(keyring::Error::NoEntry) => Ok(None),
-      Err(err) => Err(err.to_string()),
-    },
-    Err(err) => Err(err.to_string()),
-  }
+  secrets::get(&key)
 }
 
 #[tauri::command]
 fn secret_delete(key: String) -> Result<(), String> {
-  match keyring::Entry::new(KEYRING_SERVICE, &key) {
-    Ok(entry) => match entry.delete_credential() {
-      Ok(()) => Ok(()),
-      Err(keyring::Error::NoEntry) => Ok(()),
-      Err(err) => Err(err.to_string()),
-    },
-    Err(err) => Err(err.to_string()),
-  }
+  secrets::delete(&key)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
