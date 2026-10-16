@@ -105,20 +105,21 @@ export class GmailProvider implements MailProvider {
     return { emailAddress: json.emailAddress ?? '', historyId: json.historyId ?? '0' };
   }
 
-  async listThreads(opts: { sinceDays: number; cap: number; query?: string }): Promise<ListThreadsResult> {
+  async listThreads(opts: { sinceDays: number; cap: number; query?: string; pageToken?: string }): Promise<ListThreadsResult> {
     const q = encodeURIComponent(
       [`in:inbox newer_than:${opts.sinceDays}d`, opts.query].filter(Boolean).join(' '),
     );
-    const res = await this.request('GET', `/threads?q=${q}&maxResults=${opts.cap}`);
+    const page = opts.pageToken ? `&pageToken=${encodeURIComponent(opts.pageToken)}` : '';
+    const res = await this.request('GET', `/threads?q=${q}&maxResults=${opts.cap}${page}`);
     ensureOk(res, 'Gmail listThreads');
-    const json = JSON.parse(res.body) as { threads?: { id: string }[] };
+    const json = JSON.parse(res.body) as { threads?: { id: string }[]; nextPageToken?: string };
     const ids = (json.threads ?? []).map((t) => t.id);
     const threads = await mapWithConcurrency(ids, this.concurrency, (id) => this.getThread(id), {
       sleep: this.sleep,
       minIntervalMs: this.throttleMs,
     });
     const profile = await this.getProfile();
-    return { threads, seededHistoryId: profile.historyId };
+    return { threads, seededHistoryId: profile.historyId, nextPageToken: json.nextPageToken ?? null };
   }
 
   async getThread(id: string): Promise<Thread> {

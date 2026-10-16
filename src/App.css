@@ -1084,3 +1084,9 @@
   font-size: 12.5px;
   text-align: center;
 }
+
+.load-more {
+  display: flex;
+  justify-content: center;
+  padding: 8px 10px 12px;
+}

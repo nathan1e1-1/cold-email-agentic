@@ -26,11 +26,12 @@ interface Props {
   mailbox: MailboxProvider | null
   repo: Repository | null
   ownEmail: string
+  signature: string
   testMode: boolean
   onSent: (subject: string, to: string) => void
 }
 
-export function OutreachView({ ai, mailbox, repo, ownEmail, testMode, onSent }: Props) {
+export function OutreachView({ ai, mailbox, repo, ownEmail, signature, testMode, onSent }: Props) {
   const [contacts, setContacts] = useState<Contact[]>([])
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -82,6 +83,7 @@ export function OutreachView({ ai, mailbox, repo, ownEmail, testMode, onSent }: 
           tone,
           instruction: instruction || undefined,
           priorDraft,
+          signature: signature || undefined,
         })
         const parsed = parseColdDraft(text)
         if (parsed.subject) setSubject(parsed.subject)
@@ -92,7 +94,7 @@ export function OutreachView({ ai, mailbox, repo, ownEmail, testMode, onSent }: 
         setGenerating(false)
       }
     },
-    [ai, name, email, context, ownEmail, tone, instruction],
+    [ai, name, email, context, ownEmail, tone, instruction, signature],
   )
 
   const send = useCallback(async () => {

@@ -37,7 +37,7 @@ function fakeProvider(overrides: Partial<MailProvider> = {}): { provider: MailPr
     auth: async () => {},
     isAuthed: async () => true,
     getProfile: async () => ({ emailAddress: 'me@x.com', historyId: '1' }),
-    listThreads: async () => ({ threads: [thread], seededHistoryId: '1' }),
+    listThreads: async () => ({ threads: [thread], seededHistoryId: '1', nextPageToken: null }),
     getThread: async () => thread,
     getThreadsByIds: async () => [thread],
     listHistoryChanges: async () => ({
@@ -67,7 +67,7 @@ describe('GmailMailboxAdapter', () => {
     const { provider } = fakeProvider();
     const adapter = new GmailMailboxAdapter(() => provider);
     await adapter.connect();
-    expect((await adapter.listThreads()).map((t) => t.id)).toEqual(['t1']);
+    expect((await adapter.listThreads()).threads.map((t) => t.id)).toEqual(['t1']);
   });
 
   it('returns null when a thread cannot be fetched', async () => {

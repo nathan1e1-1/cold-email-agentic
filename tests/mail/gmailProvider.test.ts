@@ -93,6 +93,21 @@ describe('GmailProvider', () => {
     expect(q).toContain('is:unread -category:promotions');
   });
 
+  it('passes a page token and returns the next one', async () => {
+    const http = new FakeHttpClient().onRequest((req) => {
+      if (req.url.includes('/threads?')) {
+        return { status: 200, body: JSON.stringify({ threads: [{ id: 't1' }], nextPageToken: 'NEXT' }) };
+      }
+      if (req.url.includes('/threads/t1')) {
+        return { status: 200, body: JSON.stringify(threadRes('t1', 'sarah@acme.com', 'Q3')) };
+      }
+      return { status: 200, body: JSON.stringify({ emailAddress: 'me@x.com', historyId: '1' }) };
+    });
+    const result = await provider(http).listThreads({ sinceDays: 90, cap: 5, pageToken: 'CUR' });
+    expect(result.nextPageToken).toBe('NEXT');
+    expect(http.requests[0].url).toContain('pageToken=CUR');
+  });
+
   it('gets a single thread', async () => {
     const t = await provider(router()).getThread('t1');
     expect(t.id).toBe('t1');

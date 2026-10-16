@@ -21,6 +21,7 @@ export interface HistoryDelta {
 export interface ListThreadsResult {
   threads: Thread[];
   seededHistoryId: string;
+  nextPageToken: string | null;
 }
 
 export interface GmailProfile {
@@ -32,7 +33,7 @@ export interface MailProvider {
   auth(): Promise<void>;
   isAuthed(): Promise<boolean>;
   getProfile(): Promise<GmailProfile>;
-  listThreads(opts: { sinceDays: number; cap: number; query?: string }): Promise<ListThreadsResult>;
+  listThreads(opts: { sinceDays: number; cap: number; query?: string; pageToken?: string }): Promise<ListThreadsResult>;
   getThread(id: string): Promise<Thread>;
   getThreadsByIds(ids: string[]): Promise<Thread[]>;
   listHistoryChanges(opts: { historyId: string }): Promise<HistoryDelta>;
