@@ -212,9 +212,8 @@ export class OAuthAuthenticator implements Authenticator {
     return (await this.loadRefreshToken()) !== null;
   }
 
-  // The access token is cached in memory so the OS keychain is read at most
-  // once per session, instead of on every Gmail request (which would otherwise
-  // trigger a macOS keychain-access prompt each time).
+  // The access token is cached in memory so the secret store is read at most
+  // once per session, instead of on every Gmail request.
   async getAccessToken(): Promise<string> {
     if (this.accessToken && this.clock() < this.expiresAt - 60_000) {
       return this.accessToken;

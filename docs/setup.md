@@ -27,10 +27,10 @@ rustc --version && cargo --version
 4. **Google Auth Platform → Clients → Create client**:
    - Application type: **Desktop app**. (No redirect URIs to register — desktop clients use the loopback flow with any `http://127.0.0.1:PORT`.)
    - Click **Create**, then copy the **Client ID** and **Client secret**. The secret is shown **only once** — copy it immediately.
-5. Use them: for the draft script, pass them as `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` env vars (see §6). The app stores the resulting tokens in the macOS Keychain.
+5. Use them: for the draft script, pass them as `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` env vars (see §6). The app stores the resulting tokens locally on your Mac in a `0600` file.
 
 
-> Security: the app requests only `gmail.readonly`, `gmail.send`, and `userinfo.email`. Tokens are stored in the macOS Keychain, never logged.
+> Security: the app requests only `gmail.readonly`, `gmail.send`, and `userinfo.email`. Tokens are stored locally in a `0600` file, never logged.
 
 ## 3. Free AI key (Gemini)
 
@@ -66,11 +66,11 @@ npm run tauri dev
 
 The app connects to Gmail on launch (your browser opens for consent the first time) and your
 inbox threads appear. Click a thread, then click **Generate** to draft a reply — pick a tone
-and add a nudge like "shorter", then **Generate** again to revise. Tokens are stored in the
-macOS Keychain.
+and add a nudge like "shorter", then **Generate** again to revise. Tokens are stored locally on
+your Mac.
 
 You can also skip the `.env` and enter everything in-app: open **Settings** in the left sidebar and
-fill in the Google Client ID / secret and AI key — secrets go to the Keychain, the rest to
+fill in the Google Client ID / secret and AI key — secrets go to a local `0600` file, the rest to
 local storage. `.env` values are used as a fallback.
 
 ## 6. Draft script (test the AI on real threads)

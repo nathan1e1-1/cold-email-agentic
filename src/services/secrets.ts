@@ -1,8 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 
-// Secrets live in the macOS Keychain. Every read/write crosses into the OS and
-// can trigger a keychain-access prompt, so cache values in memory for the
-// session and skip no-op writes.
+// Secrets live in a local 0600 file (see src-tauri/src/lib.rs). Cache values in
+// memory for the session and skip no-op writes to avoid redundant IPC + disk IO.
 const cache = new Map<string, string | null>();
 
 export async function getSecret(key: string): Promise<string | null> {

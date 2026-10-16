@@ -10,8 +10,8 @@ agent that drafts the emails.
   nudge/regenerate loop.
 - **Compliance guardrails** — cold sends require a mailing address, honor opt-outs, are
   rate-limited (25/day, 3/min), and carry a `mailto:` unsubscribe.
-- **Private & local** — email data lives in local SQLite; OAuth tokens live in the macOS
-  Keychain; no backend server.
+- **Private & local** — email data lives in local SQLite; OAuth tokens and API keys live in
+  a local `0600` file; no backend server.
 
 ## Requirements
 
