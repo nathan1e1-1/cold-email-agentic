@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { loadSettings, saveSettings, SECRET_KEYS, type StoredSettings } from '../services/appSettings'
 import { setSecret } from '../services/secrets'
+import { applyTheme, loadTheme, saveTheme, type Theme } from '../services/theme'
 
 export function SettingsView({ onSaved, onReconnect }: { onSaved: () => void; onReconnect: () => void }) {
   const [settings, setSettings] = useState<StoredSettings>(loadSettings())
+  const [theme, setTheme] = useState<Theme>(loadTheme)
   const [clientSecret, setClientSecret] = useState('')
   const [geminiKey, setGeminiKey] = useState('')
   const [groqKey, setGroqKey] = useState('')
@@ -30,6 +32,13 @@ export function SettingsView({ onSaved, onReconnect }: { onSaved: () => void; on
     }
   }
 
+  const setThemeMode = (dark: boolean) => {
+    const next: Theme = dark ? 'dark' : 'light'
+    setTheme(next)
+    applyTheme(next)
+    saveTheme(next)
+  }
+
   return (
     <div className="view settings-view">
       <header className="page-head">
@@ -38,6 +47,33 @@ export function SettingsView({ onSaved, onReconnect }: { onSaved: () => void; on
           <p className="view-sub">Credentials, AI keys, and writing preferences. Secrets are stored locally in a 0600 file on this Mac.</p>
         </div>
       </header>
+
+      <div className="card settings-card">
+        <div className="card-head">
+          <div className="card-head-main">
+            <span className="card-title">Appearance</span>
+            <span className="card-sub">Choose how the app looks</span>
+          </div>
+        </div>
+        <div className="settings-row">
+          <div className="settings-row-main">
+            <span className="settings-row-title">Dark mode</span>
+            <span className="settings-row-sub">Use the darker palette across the app</span>
+          </div>
+          <label className="toggle switch">
+            <input
+              type="checkbox"
+              aria-label="Dark mode"
+              checked={theme === 'dark'}
+              onChange={(e) => setThemeMode(e.target.checked)}
+            />
+            <span className="switch-track" aria-hidden="true">
+              <span className="switch-thumb" />
+            </span>
+            <span className="switch-label">{theme === 'dark' ? 'Dark' : 'Light'}</span>
+          </label>
+        </div>
+      </div>
 
       <div className="card settings-card">
         <div className="card-head">
