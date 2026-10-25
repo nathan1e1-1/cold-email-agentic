@@ -5,9 +5,6 @@ export const SETTING_DEFAULTS = {
   display_name: '',
   own_email: '',
   signature: '',
-  mailing_address: '',
-  unsubscribe_line: '',
-  unsubscribe_mailto: '',
   rate_limit_per_day: '25',
   rate_limit_per_minute: '3',
   ai_provider: 'gemini',
@@ -26,10 +23,6 @@ export class SettingsService {
   async get(key: SettingKey): Promise<string> {
     const v = await this.repo.getSetting(key);
     if (v !== null) return v;
-    if (key === 'unsubscribe_mailto') {
-      const own = await this.repo.getSetting('own_email');
-      return own ?? SETTING_DEFAULTS.own_email;
-    }
     return SETTING_DEFAULTS[key];
   }
 

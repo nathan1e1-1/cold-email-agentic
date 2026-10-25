@@ -10,28 +10,8 @@ function ctx() {
 }
 
 describe('sendGuard', () => {
-  it('blocks cold sends without a mailing address', async () => {
-    const { repo, settings } = ctx();
-    expect(await sendGuard(repo, settings, { kind: 'cold', toEmail: 'a@z.com', now: 1000 }))
-      .toEqual({ ok: false, reason: 'missing_mailing_address' });
-  });
-
-  it('allows cold sends once a mailing address is set', async () => {
-    const { repo, settings } = ctx();
-    await settings.set('mailing_address', '1 Main St');
-    expect(await sendGuard(repo, settings, { kind: 'cold', toEmail: 'a@z.com', now: 1000 }))
-      .toEqual({ ok: true });
-  });
-
-  it('does not require a mailing address for replies', async () => {
-    const { repo, settings } = ctx();
-    expect(await sendGuard(repo, settings, { kind: 'reply', toEmail: 'a@z.com', now: 1000 }))
-      .toEqual({ ok: true });
-  });
-
   it('blocks do_not_contact addresses for any kind', async () => {
     const { repo, settings } = ctx();
-    await settings.set('mailing_address', '1 Main St');
     await repo.upsertContact({ name: 'A', email: 'a@z.com', notes: '', doNotContact: false });
     await repo.setDoNotContact('a@z.com', true);
     expect(await sendGuard(repo, settings, { kind: 'cold', toEmail: 'A@Z.com', now: 1000 }))
@@ -42,7 +22,6 @@ describe('sendGuard', () => {
 
   it('enforces the per-day cold limit', async () => {
     const { repo, settings } = ctx();
-    await settings.set('mailing_address', '1 Main St');
     await settings.set('rate_limit_per_day', '2');
     const now = 10 * 24 * 60 * 60 * 1000;
     await repo.recordSend(now - 1000, 'cold', 'x@z.com');
@@ -53,7 +32,6 @@ describe('sendGuard', () => {
 
   it('enforces the per-minute cold limit', async () => {
     const { repo, settings } = ctx();
-    await settings.set('mailing_address', '1 Main St');
     await settings.set('rate_limit_per_day', '100');
     await settings.set('rate_limit_per_minute', '1');
     const now = 10 * 24 * 60 * 60 * 1000;
@@ -71,7 +49,6 @@ describe('sendGuard', () => {
 
   it('allows a cold send exactly one under the limit', async () => {
     const { repo, settings } = ctx();
-    await settings.set('mailing_address', '1 Main St');
     await settings.set('rate_limit_per_day', '2');
     const now = 10 * 24 * 60 * 60 * 1000;
     await repo.recordSend(now - 1000, 'cold', 'x@z.com');
@@ -80,7 +57,6 @@ describe('sendGuard', () => {
 
   it('does not rate-limit replies even when the cold window is full', async () => {
     const { repo, settings } = ctx();
-    await settings.set('mailing_address', '1 Main St');
     await settings.set('rate_limit_per_day', '1');
     await settings.set('rate_limit_per_minute', '1');
     const now = 10 * 24 * 60 * 60 * 1000;
@@ -90,7 +66,6 @@ describe('sendGuard', () => {
 
   it('counts sends at the inclusive window edge', async () => {
     const { repo, settings } = ctx();
-    await settings.set('mailing_address', '1 Main St');
     await settings.set('rate_limit_per_day', '1');
     const now = 10 * 24 * 60 * 60 * 1000;
     await repo.recordSend(now - 24 * 60 * 60 * 1000, 'cold', 'x@z.com');
@@ -100,7 +75,6 @@ describe('sendGuard', () => {
 
   it('falls back to defaults when a rate setting is not numeric', async () => {
     const { repo, settings } = ctx();
-    await settings.set('mailing_address', '1 Main St');
     await settings.set('rate_limit_per_day', 'garbage');
     expect(await sendGuard(repo, settings, { kind: 'cold', toEmail: 'z@z.com', now: 1000 })).toEqual({ ok: true });
   });

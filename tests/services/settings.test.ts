@@ -9,16 +9,15 @@ describe('SettingsService', () => {
     expect(await s.get('rate_limit_per_minute')).toBe('3');
     expect(await s.get('ai_provider')).toBe('gemini');
     expect(await s.get('signature')).toBe('');
-    expect(await s.get('mailing_address')).toBe('');
   });
 
   it('persists overrides over defaults', async () => {
     const repo = new NodeRepository(':memory:');
     const s = new SettingsService(repo);
-    await s.set('mailing_address', '1 Main St');
-    expect(await s.get('mailing_address')).toBe('1 Main St');
+    await s.set('own_email', 'me@x.com');
+    expect(await s.get('own_email')).toBe('me@x.com');
     const s2 = new SettingsService(repo);
-    expect(await s2.get('mailing_address')).toBe('1 Main St');
+    expect(await s2.get('own_email')).toBe('me@x.com');
   });
 
   it('returns numeric defaults via getInt', async () => {
@@ -44,15 +43,6 @@ describe('SettingsService', () => {
     await s.set('signature', 'A');
     await s.set('signature', 'B');
     expect(await s.get('signature')).toBe('B');
-  });
-
-  it('defaults unsubscribe_mailto to own_email when unset', async () => {
-    const repo = new NodeRepository(':memory:');
-    const s = new SettingsService(repo);
-    await s.set('own_email', 'me@x.com');
-    expect(await s.get('unsubscribe_mailto')).toBe('me@x.com');
-    await s.set('unsubscribe_mailto', 'unsub@x.com');
-    expect(await s.get('unsubscribe_mailto')).toBe('unsub@x.com');
   });
 
   it('rejects unknown setting keys at compile time', async () => {

@@ -1,7 +1,7 @@
 import type { Account, TonePreset } from '../domain/types'
 import { formatDate } from '../lib/format'
 
-export type View = 'outreach' | 'board' | 'inbox' | 'dashboard' | 'settings'
+export type View = 'inbox' | 'board' | 'dashboard' | 'settings'
 
 export interface ActivityItem {
   id: number
@@ -29,14 +29,6 @@ function NavIcon({ name }: { name: View }) {
         <rect x="3" y="4" width="5" height="16" rx="1.5" />
         <rect x="9.5" y="4" width="5" height="10" rx="1.5" />
         <rect x="16" y="4" width="5" height="13" rx="1.5" />
-      </svg>
-    )
-  }
-  if (name === 'outreach') {
-    return (
-      <svg {...common} aria-hidden="true">
-        <path d="M22 2 11 13" />
-        <path d="M22 2 15 22l-4-9-9-4 20-7z" />
       </svg>
     )
   }
@@ -87,11 +79,9 @@ function Chevron({ collapsed }: { collapsed: boolean }) {
 }
 
 const NAV: { id: View; label: string }[] = [
-  { id: 'outreach', label: 'Outreach' },
-  { id: 'board', label: 'Board' },
   { id: 'inbox', label: 'Inbox' },
+  { id: 'board', label: 'Board' },
   { id: 'dashboard', label: 'Dashboard' },
-  { id: 'settings', label: 'Settings' },
 ]
 
 interface Props {
@@ -167,6 +157,20 @@ export function Sidebar({
           )}
         </div>
       )}
+
+      <div className="sidebar-settings">
+        <button
+          type="button"
+          className={view === 'settings' ? 'nav-item active' : 'nav-item'}
+          aria-current={view === 'settings' ? 'page' : undefined}
+          aria-label="Settings"
+          title={collapsed ? 'Settings' : undefined}
+          onClick={() => onNavigate('settings')}
+        >
+          <NavIcon name="settings" />
+          {!collapsed && 'Settings'}
+        </button>
+      </div>
 
       {!collapsed && (
         <div className="sidebar-foot">

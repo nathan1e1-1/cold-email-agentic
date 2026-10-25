@@ -9,18 +9,17 @@ import { createAiProvider, createMailboxProvider } from './services/providerFact
 import { Sidebar, type ActivityItem, type View } from './components/Sidebar'
 import { DashboardView } from './views/DashboardView'
 import { SettingsView } from './views/SettingsView'
-import { OutreachView } from './views/OutreachView'
 import { BoardView } from './views/BoardView'
 import { ensureCardForThread } from './services/kanban'
 import { loadSettings } from './services/appSettings'
 import { getRepository } from './db/repositoryFactory'
 import type { Repository } from './db/repository'
-import { ThreadList, type InboxMode } from './components/ThreadList'
+import { ThreadList } from './components/ThreadList'
+import { ComposePanel } from './components/ComposePanel'
 import { ReaderPane } from './components/ReaderPane'
 import { DraftPanel } from './components/DraftPanel'
 
 const VIEW_TITLE: Record<View, string> = {
-  outreach: 'Outreach',
   board: 'Board',
   inbox: 'Inbox',
   dashboard: 'Dashboard',
@@ -52,7 +51,7 @@ async function persistThreads(r: Repository, acc: Account, list: Thread[]): Prom
 }
 
 function App() {
-  const [view, setView] = useState<View>('outreach')
+  const [view, setView] = useState<View>('inbox')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(loadCollapsed)
   const [repo, setRepo] = useState<Repository | null>(null)
   const [boardVersion, setBoardVersion] = useState(0)
@@ -72,7 +71,7 @@ function App() {
   const [activity, setActivity] = useState<ActivityItem[]>([])
   const [testMode, setTestMode] = useState(true)
   const [signature, setSignature] = useState(() => loadSettings().signature)
-  const [inboxMode, setInboxMode] = useState<InboxMode>('outreach')
+  const [composing, setComposing] = useState(false)
   const [inboxOverflowed, setInboxOverflowed] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -129,9 +128,8 @@ function App() {
   }, [])
 
   const fetchInbox = useCallback(async (
-    box: MailboxProvider, r: Repository | null, mode: InboxMode, pageToken?: string,
+    box: MailboxProvider, r: Repository | null, pageToken?: string,
   ): Promise<ThreadPage> => {
-    if (mode === 'all') return box.listThreads({ pageToken })
     if (!r) return { threads: [], nextPageToken: null }
     // Windowed set — used ONLY to build the Gmail query.
     const recipients = recentRecipientEmails(await r.listColdRecipients(), Date.now())
@@ -139,6 +137,7 @@ function App() {
   }, [])
 
   const openThreadById = useCallback((threadId: string) => {
+    setComposing(false)
     setView('inbox')
     if (mailbox) void openThread(mailbox, threadId)
   }, [mailbox, openThread])
@@ -168,7 +167,7 @@ function App() {
       }
 
       if (request === inboxRequestRef.current) setBusy('Loading threads…')
-      const page = await fetchInbox(box, r, inboxMode)
+      const page = await fetchInbox(box, r)
       if (request !== inboxRequestRef.current) return
       setThreads(page.threads)
       setNextPageToken(page.nextPageToken)
@@ -192,7 +191,7 @@ function App() {
         setError(err instanceof Error ? err.message : String(err))
       }
     }
-  }, [openThread, fetchInbox, inboxMode])
+  }, [openThread, fetchInbox])
 
   useEffect(() => {
     if (startedRef.current) return
@@ -208,9 +207,23 @@ function App() {
     return () => { active = false }
   }, [])
 
-  const onColdSent = useCallback((subject: string) => {
+  const onColdSent = useCallback((subject: string, to: string, duplicate: boolean, close: boolean) => {
     pushActivity({ kind: 'sent', subject, at: Date.now(), threadId: null })
+    setStatus(`Sent to ${to}${duplicate ? ' (you had emailed this address before)' : ''}`)
+    if (close) setComposing(false)
   }, [pushActivity])
+
+  const startCompose = useCallback(() => {
+    setView('inbox'); setComposing(true); setSelected(null); setSelectedId(null)
+    setStatus(null); setError(null)
+  }, [])
+
+  const cancelCompose = useCallback(() => setComposing(false), [])
+
+  const navigate = useCallback((next: View) => {
+    if (next !== 'inbox') setComposing(false)
+    setView(next)
+  }, [])
 
   const onSend = useCallback(async () => {
     if (!mailbox || !selected || draft.trim() === '') return
@@ -221,7 +234,7 @@ function App() {
       setStatus(`Sent to ${sent.to.map((a) => a.email).join(', ')}`)
       pushActivity({ kind: 'sent', subject: selected.subject, tone, at: Date.now(), threadId: selected.id })
       if (request !== inboxRequestRef.current) return
-      const page = await fetchInbox(mailbox, repo, inboxMode)
+      const page = await fetchInbox(mailbox, repo)
       if (request !== inboxRequestRef.current) return
       setThreads(page.threads)
       setNextPageToken(page.nextPageToken)
@@ -232,7 +245,7 @@ function App() {
     } catch (err) {
       if (request === inboxRequestRef.current) setError(err instanceof Error ? err.message : String(err))
     }
-  }, [mailbox, selected, draft, tone, pushActivity, repo, inboxMode, fetchInbox])
+  }, [mailbox, selected, draft, tone, pushActivity, repo, fetchInbox])
 
   const handleGenerate = useCallback(() => {
     if (selected && ai && account) {
@@ -250,7 +263,7 @@ function App() {
     const request = inboxRequestRef.current
     setBusy('Loading more…')
     try {
-      const page = await fetchInbox(mailbox, repo, inboxMode, nextPageToken)
+      const page = await fetchInbox(mailbox, repo, nextPageToken)
       if (request !== inboxRequestRef.current) return
       setThreads((prev) => [...prev, ...page.threads])
       setNextPageToken(page.nextPageToken)
@@ -269,39 +282,7 @@ function App() {
       loadingMoreRef.current = false
       if (request === inboxRequestRef.current) setBusy(null)
     }
-  }, [mailbox, repo, account, inboxMode, nextPageToken, fetchInbox])
-
-  const switchInboxMode = useCallback(async (mode: InboxMode) => {
-    if (!mailbox || mode === inboxMode) return
-    const request = ++inboxRequestRef.current
-    setInboxMode(mode)
-    setSelected(null); setSelectedId(null); setThreads([]); setNextPageToken(null)
-    setInboxOverflowed(false)
-    setBusy('Loading threads…'); setError(null); setStatus(null)
-    try {
-      const page = await fetchInbox(mailbox, repo, mode)
-      if (request !== inboxRequestRef.current) return
-      setThreads(page.threads)
-      setNextPageToken(page.nextPageToken)
-      setInboxOverflowed(page.overflowed ?? false)
-      if (repo && account) {
-        try {
-          await persistThreads(repo, account, page.threads)
-          setBoardVersion((v) => v + 1)
-        } catch (err) {
-          if (request === inboxRequestRef.current) {
-            setError(err instanceof Error ? err.message : String(err))
-          }
-        }
-      }
-      if (request !== inboxRequestRef.current) return
-      if (page.threads.length > 0) await openThread(mailbox, page.threads[0].id)
-    } catch (err) {
-      if (request === inboxRequestRef.current) setError(err instanceof Error ? err.message : String(err))
-    } finally {
-      if (request === inboxRequestRef.current) setBusy(null)
-    }
-  }, [mailbox, repo, account, inboxMode, fetchInbox, openThread])
+  }, [mailbox, repo, account, nextPageToken, fetchInbox])
 
   const promptText = useMemo(() => {
     if (!selected) return null
@@ -331,7 +312,7 @@ function App() {
     <div className="app">
       <Sidebar
         view={view}
-        onNavigate={setView}
+        onNavigate={navigate}
         account={account}
         activity={activity}
         onOpenThread={openThreadById}
@@ -358,18 +339,6 @@ function App() {
         {status && <div className="banner ok">{status}</div>}
 
         <div className="content">
-          {view === 'outreach' && (
-            <OutreachView
-              ai={ai}
-              mailbox={mailbox}
-              repo={repo}
-              ownEmail={account?.ownEmail ?? ''}
-              signature={signature}
-              testMode={testMode}
-              onSent={onColdSent}
-            />
-          )}
-
           {view === 'board' && (
             <BoardView repo={repo} onOpenThread={openThreadById} refreshKey={boardVersion} />
           )}
@@ -391,25 +360,31 @@ function App() {
           {view === 'inbox' && (
             <div className="workspace">
               <ThreadList
-                key={inboxMode}
                 threads={threads}
                 selectedId={selectedId}
-                onSelect={(id) => { if (mailbox) void openThread(mailbox, id) }}
+                onSelect={(id) => { setComposing(false); if (mailbox) void openThread(mailbox, id) }}
                 hasMore={nextPageToken !== null}
                 loadingMore={busy === 'Loading more…'}
                 onLoadMore={() => void loadMore()}
-                mode={inboxMode}
-                onModeChange={(m) => void switchInboxMode(m)}
+                onCompose={startCompose}
                 overflowed={inboxOverflowed}
                 loading={busy !== null}
-                emptyText={
-                  inboxMode === 'outreach'
-                    ? 'No replies from your outreach yet — email someone from Outreach.'
-                    : 'No mail to show.'
-                }
+                emptyText="No replies yet — send a cold email."
               />
               <section className="reader">
-                {selected ? (
+                {composing ? (
+                  <ComposePanel
+                    ai={ai}
+                    mailbox={mailbox}
+                    repo={repo}
+                    ownEmail={account?.ownEmail ?? ''}
+                    signature={signature}
+                    testMode={testMode}
+                    onSent={onColdSent}
+                    onError={setError}
+                    onCancel={cancelCompose}
+                  />
+                ) : selected ? (
                   <>
                     <ReaderPane thread={selected} />
                     <DraftPanel
@@ -440,7 +415,7 @@ function App() {
           )}
 
           {view === 'settings' && (
-            <SettingsView repo={repo} onSaved={() => { setSignature(loadSettings().signature); void connect() }} />
+            <SettingsView onSaved={() => { setSignature(loadSettings().signature); void connect() }} />
           )}
         </div>
       </div>

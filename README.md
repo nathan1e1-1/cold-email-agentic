@@ -3,13 +3,12 @@
 A local, single-user macOS desktop app for **cold outreach and inbox triage**, with an AI
 agent that drafts the emails.
 
-- **Outreach** — add a contact (name, email, one line of context), and the agent drafts a
-  first-touch email (subject + body) you can regenerate and tune before sending.
+- **Compose** — type a recipient in the Inbox, and the agent drafts a first-touch email you can
+  regenerate and tune before sending.
 - **Board** — drag threads between *Haven't touched / In review / Sent* (persisted locally).
 - **Inbox** — read threads like a real mail client and draft replies with tone chips and a
   nudge/regenerate loop.
-- **Compliance guardrails** — cold sends require a mailing address, honor opt-outs, are
-  rate-limited (25/day, 3/min), and carry a `mailto:` unsubscribe.
+- **Guardrails** — sends honor opt-outs and are rate-limited (25/day, 3/min).
 - **Private & local** — email data lives in local SQLite; OAuth tokens and API keys live in
   a local `0600` file; no backend server.
 

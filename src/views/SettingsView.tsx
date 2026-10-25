@@ -1,10 +1,8 @@
 import { useState } from 'react'
 import { loadSettings, saveSettings, SECRET_KEYS, type StoredSettings } from '../services/appSettings'
 import { setSecret } from '../services/secrets'
-import { SettingsService } from '../services/settings'
-import type { Repository } from '../db/repository'
 
-export function SettingsView({ repo, onSaved }: { repo: Repository | null; onSaved: () => void }) {
+export function SettingsView({ onSaved }: { onSaved: () => void }) {
   const [settings, setSettings] = useState<StoredSettings>(loadSettings())
   const [clientSecret, setClientSecret] = useState('')
   const [geminiKey, setGeminiKey] = useState('')
@@ -19,11 +17,6 @@ export function SettingsView({ repo, onSaved }: { repo: Repository | null; onSav
     setSaved(false)
     try {
       saveSettings(settings)
-      if (repo) {
-        const svc = new SettingsService(repo)
-        await svc.set('mailing_address', settings.mailingAddress)
-        await svc.set('unsubscribe_line', settings.unsubscribeLine)
-      }
       if (clientSecret) await setSecret(SECRET_KEYS.googleClientSecret, clientSecret)
       if (geminiKey) await setSecret(SECRET_KEYS.geminiApiKey, geminiKey)
       if (groqKey) await setSecret(SECRET_KEYS.groqApiKey, groqKey)
@@ -40,7 +33,7 @@ export function SettingsView({ repo, onSaved }: { repo: Repository | null; onSav
   return (
     <div className="view">
       <h1 className="view-title">Settings</h1>
-      <p className="view-sub">Credentials and cold-email guardrails. Secrets are stored locally in a 0600 file on this Mac.</p>
+      <p className="view-sub">Credentials, AI keys, and writing preferences. Secrets are stored locally in a 0600 file on this Mac.</p>
 
       <div className="card settings-card">
         <div className="card-head"><span className="card-title">Gmail</span></div>
@@ -92,25 +85,6 @@ export function SettingsView({ repo, onSaved }: { repo: Repository | null; onSav
             value={settings.signature}
             onChange={(e) => setSettings({ ...settings, signature: e.target.value })}
             placeholder="— Nathan"
-          />
-        </label>
-      </div>
-
-      <div className="card settings-card">
-        <div className="card-head"><span className="card-title">Cold-email guardrails</span></div>
-        <label className="field">
-          <span>Mailing address <em>· required to cold email</em></span>
-          <input
-            value={settings.mailingAddress}
-            onChange={(e) => setSettings({ ...settings, mailingAddress: e.target.value })}
-            placeholder="123 Main St, City, State ZIP"
-          />
-        </label>
-        <label className="field">
-          <span>Unsubscribe line <em>· appended to cold emails</em></span>
-          <input
-            value={settings.unsubscribeLine}
-            onChange={(e) => setSettings({ ...settings, unsubscribeLine: e.target.value })}
           />
         </label>
       </div>

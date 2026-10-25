@@ -2,8 +2,6 @@ export interface StoredSettings {
   googleClientId: string;
   redirectUri: string;
   aiProvider: 'gemini' | 'groq';
-  mailingAddress: string;
-  unsubscribeLine: string;
   signature: string;
 }
 
@@ -19,8 +17,6 @@ const DEFAULTS: StoredSettings = {
   googleClientId: '',
   redirectUri: 'http://127.0.0.1:8765',
   aiProvider: 'groq',
-  mailingAddress: '',
-  unsubscribeLine: 'If you would rather not hear from me, just reply "unsubscribe".',
   signature: '',
 };
 

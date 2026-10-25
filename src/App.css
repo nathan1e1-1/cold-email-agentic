@@ -206,6 +206,11 @@
   white-space: nowrap;
 }
 
+.sidebar-settings {
+  margin-top: auto;
+  padding: 0 10px;
+}
+
 .sidebar-foot {
   display: flex;
   align-items: center;
@@ -411,6 +416,7 @@
 .list-head {
   display: flex;
   align-items: center;
+  gap: 8px;
   justify-content: space-between;
   padding: 16px 16px 10px;
   font-size: 12px;
@@ -426,6 +432,12 @@
 
 .list-head .count {
   color: var(--text-faint);
+}
+
+.new-email {
+  margin-left: auto;
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 .list-search {
@@ -881,14 +893,6 @@
   background: var(--surface-2);
 }
 
-.chip.active {
-  background: var(--primary);
-  color: var(--on-primary);
-  border-color: transparent;
-}
-
-.mode-toggle { display: flex; gap: 6px; }
-
 .chip:disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -962,22 +966,6 @@
     border-bottom: 1px solid var(--border);
     max-height: 42vh;
   }
-}
-
-.new-contact {
-  width: 100%;
-  padding: 9px 12px;
-  border: 1px dashed var(--border-strong);
-  border-radius: var(--radius);
-  background: transparent;
-  color: var(--text);
-  font-size: 13px;
-  font-weight: 550;
-  text-align: center;
-}
-
-.new-contact:hover {
-  background: var(--surface-2);
 }
 
 .reader > .composer:first-child {

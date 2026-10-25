@@ -9,8 +9,6 @@ function senderLabel(thread: Thread): string {
   return last.direction === 'outbound' ? 'You' : last.from.name ?? last.from.email
 }
 
-export type InboxMode = 'outreach' | 'all';
-
 interface Props {
   threads: Thread[]
   selectedId: string | null
@@ -18,14 +16,13 @@ interface Props {
   hasMore: boolean
   loadingMore: boolean
   onLoadMore: () => void
-  mode: InboxMode
-  onModeChange: (mode: InboxMode) => void
+  onCompose: () => void
   emptyText: string
   overflowed: boolean
   loading: boolean
 }
 
-export function ThreadList({ threads, selectedId, onSelect, hasMore, loadingMore, onLoadMore, mode, onModeChange, emptyText, overflowed, loading }: Props) {
+export function ThreadList({ threads, selectedId, onSelect, hasMore, loadingMore, onLoadMore, onCompose, emptyText, overflowed, loading }: Props) {
   const [query, setQuery] = useState('')
   const q = query.trim().toLowerCase()
   const visible = q
@@ -39,25 +36,8 @@ export function ThreadList({ threads, selectedId, onSelect, hasMore, loadingMore
   return (
     <aside className="list">
       <div className="list-head">
-        {mode === 'outreach' ? 'Outreach replies' : 'Inbox'} <span className="count">{visible.length}</span>
-      </div>
-      <div className="list-search mode-toggle">
-        <button
-          type="button"
-          aria-pressed={mode === 'outreach'}
-          className={mode === 'outreach' ? 'chip active' : 'chip ghost'}
-          onClick={() => onModeChange('outreach')}
-        >
-          Outreach replies
-        </button>
-        <button
-          type="button"
-          aria-pressed={mode === 'all'}
-          className={mode === 'all' ? 'chip active' : 'chip ghost'}
-          onClick={() => onModeChange('all')}
-        >
-          All mail
-        </button>
+        Inbox <span className="count">{visible.length}</span>
+        <button type="button" className="chip ghost new-email" onClick={onCompose}>+ New</button>
       </div>
       <div className="list-search">
         <input
