@@ -26,6 +26,22 @@ describe('migrate', () => {
     const row = db.prepare('PRAGMA user_version').get() as { user_version: number };
     expect(row.user_version).toBe(MIGRATIONS.length);
   });
+
+  it('upgrades a version 2 database by adding the sends thread_id column', () => {
+    const db = new DatabaseSync(':memory:');
+    db.exec(MIGRATIONS[0]);
+    db.exec(MIGRATIONS[1]);
+    db.exec('PRAGMA user_version = 2');
+    const before = db.prepare('PRAGMA table_info(sends)').all() as { name: string }[];
+    expect(before.map((c) => c.name)).not.toContain('thread_id');
+
+    migrate(db as any);
+
+    const after = db.prepare('PRAGMA table_info(sends)').all() as { name: string }[];
+    expect(after.map((c) => c.name)).toContain('thread_id');
+    const row = db.prepare('PRAGMA user_version').get() as { user_version: number };
+    expect(row.user_version).toBe(MIGRATIONS.length);
+  });
 });
 
 describe('NodeRepository', () => {
@@ -191,6 +207,32 @@ describe('NodeRepository', () => {
     expect(await repo.countSendsSince(2000, 'cold')).toBe(1);
     expect(await repo.hasColdSendTo('x@z.com')).toBe(true);
     expect(await repo.hasColdSendTo('replyonly@z.com')).toBe(false);
+  });
+
+  it('lists distinct cold recipients, newest first, excluding the account address', async () => {
+    const repo = mk();
+    await repo.upsertAccount({ provider: 'gmail', email: 'Me@X.com', ownEmail: 'Me@X.com',
+      tokenRef: 't', createdAt: 1 });
+    await repo.recordSend(1000, 'cold', ' A@Z.com ', 'thr-1');
+    await repo.recordSend(2000, 'cold', 'b@z.com', 'thr-2');
+    await repo.recordSend(3000, 'cold', 'a@z.com', 'thr-3');
+    await repo.recordSend(4000, 'reply', 'replyonly@z.com');
+    await repo.recordSend(5000, 'cold', ' ME@X.COM ', 'thr-self');
+
+    expect(await repo.listColdRecipients()).toEqual([
+      { email: 'a@z.com', lastSentAt: 3000 },
+      { email: 'b@z.com', lastSentAt: 2000 },
+    ]);
+  });
+
+  it('persists the sent thread id on the send row', async () => {
+    const repo = mk();
+    await repo.recordSend(1000, 'cold', 'a@z.com', 'thr-1');
+    await repo.recordSend(2000, 'cold', 'b@z.com');
+    const db = (repo as unknown as { db: DatabaseSync }).db;
+    const rows = db.prepare('SELECT thread_id FROM sends ORDER BY id ASC').all() as { thread_id: string | null }[];
+    expect(rows[0].thread_id).toBe('thr-1');
+    expect(rows[1].thread_id).toBeNull();
   });
 
   it('stores settings', async () => {

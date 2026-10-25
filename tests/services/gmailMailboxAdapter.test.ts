@@ -101,13 +101,14 @@ describe('GmailMailboxAdapter', () => {
     const { provider, sent } = fakeProvider();
     const adapter = new GmailMailboxAdapter(() => provider);
     await adapter.connect();
-    const message = await adapter.sendNew({
+    const { message, threadId } = await adapter.sendNew({
       to: { name: 'Dana', email: 'dana@acme.com' },
       subject: 'Hello',
       bodyText: 'Hi Dana',
       listUnsubscribeMailto: 'mailto:me@x.com?subject=unsubscribe',
     });
     expect(message.subject).toBe('Hello');
+    expect(threadId).toBe('t1');
     expect(message.direction).toBe('outbound');
     expect(message.to[0].email).toBe('dana@acme.com');
     expect(sent[0]).toMatchObject({
@@ -116,5 +117,108 @@ describe('GmailMailboxAdapter', () => {
       listUnsubscribeMailto: 'mailto:me@x.com?subject=unsubscribe',
     });
     expect(sent[0].threadId).toBeUndefined();
+  });
+
+  it('outreach mode with no recipients makes no provider call', async () => {
+    let calls = 0;
+    const { provider } = fakeProvider({
+      listThreads: async () => { calls++; return { threads: [thread], seededHistoryId: '1', nextPageToken: null }; },
+    });
+    const adapter = new GmailMailboxAdapter(() => provider);
+    await adapter.connect();
+    expect(await adapter.listThreads({ outreachRecipients: [] }))
+      .toEqual({ threads: [], nextPageToken: null });
+    expect(calls).toBe(0);
+  });
+
+  it('outreach mode passes the from-query, 30-day window, cap, page token, and inInbox=false', async () => {
+    const seen: unknown[] = [];
+    const { provider } = fakeProvider({
+      listThreads: async (opts) => { seen.push(opts); return { threads: [thread], seededHistoryId: '1', nextPageToken: 'next' }; },
+    });
+    const adapter = new GmailMailboxAdapter(() => provider);
+    await adapter.connect();
+    const page = await adapter.listThreads({
+      outreachRecipients: ['sarah@acme.com'], pageToken: 'p2',
+    });
+    expect(seen[0]).toEqual({
+      sinceDays: 30, cap: 20, query: '(from:"sarah@acme.com")', pageToken: 'p2', inInbox: false,
+    });
+    expect(page.nextPageToken).toBe('next');
+    expect(page.overflowed).toBeFalsy();
+  });
+
+  it('skips an empty page when a next-page token exists', async () => {
+    const seen: string[] = [];
+    const { provider } = fakeProvider({
+      listThreads: async (opts) => {
+        seen.push(opts.pageToken ?? 'first');
+        if (!opts.pageToken) {
+          return { threads: [], seededHistoryId: '1', nextPageToken: 'p2' };
+        }
+        return { threads: [thread], seededHistoryId: '1', nextPageToken: 'p3' };
+      },
+    });
+    const adapter = new GmailMailboxAdapter(() => provider);
+    await adapter.connect();
+    const page = await adapter.listThreads({ outreachRecipients: ['sarah@acme.com'] });
+    expect(seen).toEqual(['first', 'p2']);
+    expect(page.threads.map((t) => t.id)).toEqual(['t1']);
+    expect(page.nextPageToken).toBe('p3');
+  });
+
+  it('outreach overflow merges, dedupes, sorts newest first, and caps at 20', async () => {
+    const seen: Parameters<MailProvider['listThreads']>[0][] = [];
+    let call = 0;
+    const { provider } = fakeProvider({
+      listThreads: async (opts) => {
+        seen.push(opts);
+        const c = call++;
+        return {
+          threads: Array.from({ length: 10 }, (_, i) => ({
+            ...thread,
+            id: `t-${c * 8 + i}`,
+            lastMessageAt: c * 10 + i,
+          })),
+          seededHistoryId: '1',
+          nextPageToken: null,
+        };
+      },
+    });
+    const adapter = new GmailMailboxAdapter(() => provider);
+    await adapter.connect();
+    const many = Array.from({ length: 500 }, (_, i) => `person${i}@example.com`);
+    const page = await adapter.listThreads({ outreachRecipients: many });
+
+    expect(seen.length).toBeGreaterThan(1);
+    expect(seen.every((o) => o.sinceDays === 30 && o.inInbox === false && o.cap > 0)).toBe(true);
+    expect(page.nextPageToken).toBeNull();
+    expect(page.overflowed).toBe(true);
+    expect(page.threads.length).toBe(20);
+    const ids = page.threads.map((t) => t.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    const dates = page.threads.map((t) => t.lastMessageAt);
+    expect(dates).toEqual([...dates].sort((a, b) => b - a));
+  });
+
+  it('stops after skipping 3 dead pages', async () => {
+    const seen: (string | undefined)[] = [];
+    const { provider } = fakeProvider({
+      listThreads: async (opts) => {
+        seen.push(opts.pageToken);
+        return {
+          threads: [],
+          seededHistoryId: '1',
+          nextPageToken: `p${seen.length + 1}`,
+        };
+      },
+    });
+    const adapter = new GmailMailboxAdapter(() => provider);
+    await adapter.connect();
+    const page = await adapter.listThreads({ outreachRecipients: ['sarah@acme.com'] });
+
+    expect(seen).toEqual([undefined, 'p2', 'p3', 'p4']);
+    expect(page.threads).toEqual([]);
+    expect(page.nextPageToken).toBe('p5');
   });
 });

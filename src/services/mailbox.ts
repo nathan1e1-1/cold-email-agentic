@@ -10,13 +10,25 @@ export interface NewEmailInput {
 export interface ThreadPage {
   threads: Thread[];
   nextPageToken: string | null;
+  overflowed?: boolean;
+}
+
+export interface ThreadQueryOptions {
+  pageToken?: string;
+  /** Present → outreach mode. Empty array means "no cold recipients yet". */
+  outreachRecipients?: string[];
+}
+
+export interface SentNewEmail {
+  message: Message;
+  threadId: string;
 }
 
 export interface MailboxProvider {
   connect(): Promise<Account>;
   isConnected(): boolean;
-  listThreads(opts?: { pageToken?: string }): Promise<ThreadPage>;
+  listThreads(opts?: ThreadQueryOptions): Promise<ThreadPage>;
   getThread(id: string): Promise<Thread | null>;
   send(threadId: string, body: string): Promise<Message>;
-  sendNew(input: NewEmailInput): Promise<Message>;
+  sendNew(input: NewEmailInput): Promise<SentNewEmail>;
 }

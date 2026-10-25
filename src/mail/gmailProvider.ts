@@ -105,10 +105,13 @@ export class GmailProvider implements MailProvider {
     return { emailAddress: json.emailAddress ?? '', historyId: json.historyId ?? '0' };
   }
 
-  async listThreads(opts: { sinceDays: number; cap: number; query?: string; pageToken?: string }): Promise<ListThreadsResult> {
-    const q = encodeURIComponent(
-      [`in:inbox newer_than:${opts.sinceDays}d`, opts.query].filter(Boolean).join(' '),
-    );
+  async listThreads(opts: {
+    sinceDays: number; cap: number; query?: string; pageToken?: string; inInbox?: boolean;
+  }): Promise<ListThreadsResult> {
+    const base = opts.inInbox === false
+      ? [`newer_than:${opts.sinceDays}d`, '-in:spam', '-in:trash']
+      : [`in:inbox newer_than:${opts.sinceDays}d`];
+    const q = encodeURIComponent([base.join(' '), opts.query].filter(Boolean).join(' '));
     const page = opts.pageToken ? `&pageToken=${encodeURIComponent(opts.pageToken)}` : '';
     const res = await this.request('GET', `/threads?q=${q}&maxResults=${opts.cap}${page}`);
     ensureOk(res, 'Gmail listThreads');

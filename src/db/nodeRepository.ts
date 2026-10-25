@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { migrate } from './schema';
 import type { Repository, RepoAccount, RepoThread } from './repository';
-import type { Account, Address, Card, CardStatus, Contact, Draft, Message, SendKind, Thread } from '../domain/types';
+import type { Account, Address, Card, CardStatus, ColdRecipient, Contact, Draft, Message, SendKind, Thread } from '../domain/types';
 
 const bool = (n: number | null | undefined) => n === 1;
 const toBool = (b: boolean) => (b ? 1 : 0);
@@ -213,8 +213,25 @@ export class NodeRepository implements Repository {
     this.run('UPDATE drafts SET is_chosen = CASE WHEN id=? THEN 1 ELSE 0 END WHERE card_id=?', draftId, cardId);
   }
 
-  async recordSend(sentAt: number, kind: SendKind, toEmail: string): Promise<void> {
-    this.run('INSERT INTO sends (sent_at,kind,to_email) VALUES (?,?,?)', sentAt, kind, normEmail(toEmail));
+  async recordSend(sentAt: number, kind: SendKind, toEmail: string, threadId?: string): Promise<void> {
+    this.run(
+      'INSERT INTO sends (sent_at,kind,to_email,thread_id) VALUES (?,?,?,?)',
+      sentAt, kind, normEmail(toEmail), threadId ?? null,
+    );
+  }
+
+  async listColdRecipients(): Promise<ColdRecipient[]> {
+    const rows = this.all<{ email: string; last_sent_at: number }>(
+      `SELECT lower(to_email) AS email, MAX(sent_at) AS last_sent_at
+         FROM sends WHERE kind='cold'
+        GROUP BY lower(to_email)
+        ORDER BY last_sent_at DESC`,
+    );
+    const account = await this.getAccount();
+    const own = account ? normEmail(account.ownEmail) : null;
+    return rows
+      .map((r) => ({ email: normEmail(r.email), lastSentAt: Number(r.last_sent_at) }))
+      .filter((r) => r.email !== own);
   }
 
   async countSendsSince(sinceTs: number, kind: SendKind): Promise<number> {

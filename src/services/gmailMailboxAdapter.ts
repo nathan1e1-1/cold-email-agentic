@@ -1,6 +1,12 @@
 import type { Account, Message, Thread } from '../domain/types';
 import type { MailProvider } from '../mail/mailProvider';
-import type { MailboxProvider, NewEmailInput, ThreadPage } from './mailbox';
+import type {
+  MailboxProvider, NewEmailInput, SentNewEmail, ThreadPage, ThreadQueryOptions,
+} from './mailbox';
+import {
+  buildOutreachQuery, chunkRecipientQueries,
+  OUTREACH_CAP, OUTREACH_QUERY_BUDGET, OUTREACH_WINDOW_DAYS,
+} from '../mail/outreach';
 
 export type MailProviderFactory = (ownEmail: string) => MailProvider;
 
@@ -36,11 +42,49 @@ export class GmailMailboxAdapter implements MailboxProvider {
     return this.provider;
   }
 
-  async listThreads(opts?: { pageToken?: string }): Promise<ThreadPage> {
-    const { threads, nextPageToken } = await this.requireProvider().listThreads({
-      sinceDays: 90, cap: 20, pageToken: opts?.pageToken,
-    });
-    return { threads, nextPageToken: nextPageToken ?? null };
+  async listThreads(opts?: ThreadQueryOptions): Promise<ThreadPage> {
+    const provider = this.requireProvider();
+    const recipients = opts?.outreachRecipients;
+
+    if (recipients === undefined) {
+      const page = await provider.listThreads({
+        sinceDays: 90, cap: 20, pageToken: opts?.pageToken,
+      });
+      return { threads: page.threads, nextPageToken: page.nextPageToken ?? null };
+    }
+
+    const query = buildOutreachQuery(recipients);
+    if (!query) return { threads: [], nextPageToken: null };
+
+    if (query.length <= OUTREACH_QUERY_BUDGET) {
+      const args = {
+        sinceDays: OUTREACH_WINDOW_DAYS, cap: OUTREACH_CAP, query, inInbox: false,
+      };
+      let page = await provider.listThreads({ ...args, pageToken: opts?.pageToken });
+      // A page can be empty while a token exists; skip up to 3 dead pages.
+      for (let attempt = 0; page.threads.length === 0 && page.nextPageToken && attempt < 3; attempt++) {
+        page = await provider.listThreads({ ...args, pageToken: page.nextPageToken });
+      }
+      return { threads: page.threads, nextPageToken: page.nextPageToken ?? null };
+    }
+
+    const queries = chunkRecipientQueries(recipients);
+    const perChunk = Math.max(1, Math.floor(OUTREACH_CAP / queries.length));
+    const seen = new Set<string>();
+    const merged: Thread[] = [];
+    for (const chunk of queries) {
+      if (merged.length >= OUTREACH_CAP) break;
+      const { threads } = await provider.listThreads({
+        sinceDays: OUTREACH_WINDOW_DAYS, cap: perChunk, query: chunk, inInbox: false,
+      });
+      for (const thread of threads) {
+        if (seen.has(thread.id)) continue;
+        seen.add(thread.id);
+        merged.push(thread);
+      }
+    }
+    merged.sort((a, b) => b.lastMessageAt - a.lastMessageAt);
+    return { threads: merged.slice(0, OUTREACH_CAP), nextPageToken: null, overflowed: true };
   }
 
   async getThread(id: string): Promise<Thread | null> {
@@ -85,7 +129,7 @@ export class GmailMailboxAdapter implements MailboxProvider {
     };
   }
 
-  async sendNew(input: NewEmailInput): Promise<Message> {
+  async sendNew(input: NewEmailInput): Promise<SentNewEmail> {
     const provider = this.requireProvider();
     const ownEmail = this.account?.ownEmail ?? '';
     const result = await provider.send({
@@ -95,17 +139,20 @@ export class GmailMailboxAdapter implements MailboxProvider {
       listUnsubscribeMailto: input.listUnsubscribeMailto,
     });
     return {
-      id: result.messageId,
-      rfcMessageId: '',
-      references: [],
-      from: { email: ownEmail },
-      to: [input.to],
-      cc: [],
-      subject: input.subject,
-      bodyText: input.bodyText,
-      hasListUnsubscribe: Boolean(input.listUnsubscribeMailto),
-      date: Date.now(),
-      direction: 'outbound',
+      threadId: result.threadId,
+      message: {
+        id: result.messageId,
+        rfcMessageId: '',
+        references: [],
+        from: { email: ownEmail },
+        to: [input.to],
+        cc: [],
+        subject: input.subject,
+        bodyText: input.bodyText,
+        hasListUnsubscribe: Boolean(input.listUnsubscribeMailto),
+        date: Date.now(),
+        direction: 'outbound',
+      },
     };
   }
 }

@@ -109,14 +109,14 @@ export function OutreachView({ ai, mailbox, repo, ownEmail, signature, testMode,
     const footer = [mailingAddress, unsubscribeLine].filter(Boolean).join('\n')
     const fullBody = footer ? `${body.trim()}\n\n${footer}` : body.trim()
     try {
-      await mailbox.sendNew({
+      const { threadId } = await mailbox.sendNew({
         to: { name: name.trim() || undefined, email: email.trim() },
         subject: subject.trim() || '(no subject)',
         bodyText: fullBody,
         listUnsubscribeMailto: `mailto:${ownEmail}?subject=unsubscribe`,
       })
       await repo.upsertContact({ name: name.trim(), email: email.trim(), notes: context.trim(), doNotContact: false })
-      await repo.recordSend(Date.now(), 'cold', email.trim())
+      await repo.recordSend(Date.now(), 'cold', email.trim(), threadId || undefined)
       await loadContacts()
       onSent(subject.trim() || '(no subject)', email.trim())
       setStatus(`Sent to ${email.trim()}${duplicate ? ' (you had emailed this address before)' : ''}`)

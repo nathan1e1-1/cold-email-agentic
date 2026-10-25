@@ -1,4 +1,4 @@
-import type { Account, Card, CardStatus, Contact, Draft, Message, SendKind, Thread } from '../domain/types';
+import type { Account, Card, CardStatus, ColdRecipient, Contact, Draft, Message, SendKind, Thread } from '../domain/types';
 
 export interface RepoAccount extends Account {
   rowId: number;
@@ -44,7 +44,9 @@ export interface Repository {
   listDrafts(cardId: number): Promise<Draft[]>;
   chooseDraft(draftId: number, cardId: number): Promise<void>;
 
-  recordSend(sentAt: number, kind: SendKind, toEmail: string): Promise<void>;
+  recordSend(sentAt: number, kind: SendKind, toEmail: string, threadId?: string): Promise<void>;
+  /** Distinct cold recipients (lowercased), newest cold send first, excluding the account's own address. */
+  listColdRecipients(): Promise<ColdRecipient[]>;
   countSendsSince(sinceTs: number, kind: SendKind): Promise<number>;
   hasColdSendTo(email: string): Promise<boolean>;
 

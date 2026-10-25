@@ -9,6 +9,8 @@ function senderLabel(thread: Thread): string {
   return last.direction === 'outbound' ? 'You' : last.from.name ?? last.from.email
 }
 
+export type InboxMode = 'outreach' | 'all';
+
 interface Props {
   threads: Thread[]
   selectedId: string | null
@@ -16,9 +18,14 @@ interface Props {
   hasMore: boolean
   loadingMore: boolean
   onLoadMore: () => void
+  mode: InboxMode
+  onModeChange: (mode: InboxMode) => void
+  emptyText: string
+  overflowed: boolean
+  loading: boolean
 }
 
-export function ThreadList({ threads, selectedId, onSelect, hasMore, loadingMore, onLoadMore }: Props) {
+export function ThreadList({ threads, selectedId, onSelect, hasMore, loadingMore, onLoadMore, mode, onModeChange, emptyText, overflowed, loading }: Props) {
   const [query, setQuery] = useState('')
   const q = query.trim().toLowerCase()
   const visible = q
@@ -32,7 +39,25 @@ export function ThreadList({ threads, selectedId, onSelect, hasMore, loadingMore
   return (
     <aside className="list">
       <div className="list-head">
-        Inbox <span className="count">{visible.length}</span>
+        {mode === 'outreach' ? 'Outreach replies' : 'Inbox'} <span className="count">{visible.length}</span>
+      </div>
+      <div className="list-search mode-toggle">
+        <button
+          type="button"
+          aria-pressed={mode === 'outreach'}
+          className={mode === 'outreach' ? 'chip active' : 'chip ghost'}
+          onClick={() => onModeChange('outreach')}
+        >
+          Outreach replies
+        </button>
+        <button
+          type="button"
+          aria-pressed={mode === 'all'}
+          className={mode === 'all' ? 'chip active' : 'chip ghost'}
+          onClick={() => onModeChange('all')}
+        >
+          All mail
+        </button>
       </div>
       <div className="list-search">
         <input
@@ -43,6 +68,7 @@ export function ThreadList({ threads, selectedId, onSelect, hasMore, loadingMore
           aria-label="Search threads"
         />
       </div>
+      {overflowed && <p className="hint">Showing the newest replies.</p>}
       <ul>
         {visible.map((t) => {
           const label = senderLabel(t)
@@ -67,6 +93,7 @@ export function ThreadList({ threads, selectedId, onSelect, hasMore, loadingMore
           )
         })}
       </ul>
+      {visible.length === 0 && !loading && <p className="hint">{threads.length === 0 ? emptyText : 'No matches.'}</p>}
       {hasMore && (
         <div className="load-more">
           <button type="button" className="chip ghost" disabled={loadingMore} onClick={onLoadMore}>

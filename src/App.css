@@ -881,6 +881,14 @@
   background: var(--surface-2);
 }
 
+.chip.active {
+  background: var(--primary);
+  color: var(--on-primary);
+  border-color: transparent;
+}
+
+.mode-toggle { display: flex; gap: 6px; }
+
 .chip:disabled {
   opacity: 0.5;
   cursor: not-allowed;

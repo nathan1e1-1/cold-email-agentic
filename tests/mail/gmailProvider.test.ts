@@ -93,6 +93,24 @@ describe('GmailProvider', () => {
     expect(q).toContain('is:unread -category:promotions');
   });
 
+  it('omits in:inbox and excludes spam/trash when inInbox is false', async () => {
+    const http = router();
+    await provider(http).listThreads({
+      sinceDays: 30, cap: 20, query: '(from:"a@z.com")', inInbox: false,
+    });
+    const q = new URL(http.requests[0].url).searchParams.get('q') ?? '';
+    expect(q).toContain('newer_than:30d');
+    expect(q).toContain('-in:spam');
+    expect(q).toContain('-in:trash');
+    expect(q).not.toContain('in:inbox');
+  });
+
+  it('keeps in:inbox by default', async () => {
+    const http = router();
+    await provider(http).listThreads({ sinceDays: 90, cap: 20 });
+    expect(new URL(http.requests[0].url).searchParams.get('q')).toContain('in:inbox');
+  });
+
   it('passes a page token and returns the next one', async () => {
     const http = new FakeHttpClient().onRequest((req) => {
       if (req.url.includes('/threads?')) {

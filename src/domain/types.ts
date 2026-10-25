@@ -60,6 +60,11 @@ export interface Card {
   updatedAt: number;
 }
 
+export interface ColdRecipient {
+  email: string;
+  lastSentAt: number;
+}
+
 export interface Draft {
   id: number;
   cardId: number | null;

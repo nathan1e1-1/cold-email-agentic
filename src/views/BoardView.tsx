@@ -6,6 +6,7 @@ import {
 import { CARD_STATUSES, type Card, type CardStatus } from '../domain/types'
 import type { RepoThread, Repository } from '../db/repository'
 import { groupCardsByStatus } from '../services/kanban'
+import { loadBoard } from '../services/board'
 
 const COLUMN_LABEL: Record<CardStatus, string> = {
   untouched: "Haven't touched",
@@ -78,25 +79,26 @@ export function BoardView({ repo, onOpenThread, refreshKey }: Props) {
   const [cards, setCards] = useState<Card[]>([])
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
 
+  const load = useCallback(async () => (repo ? loadBoard(repo) : null), [repo])
+
   const reload = useCallback(async () => {
-    if (!repo) return
-    const [t, c] = await Promise.all([repo.listThreads(), repo.listCards()])
-    setThreads(t)
-    setCards(c)
-  }, [repo])
+    const result = await load()
+    if (!result) return
+    setThreads(result.threads)
+    setCards(result.cards)
+  }, [load])
 
   useEffect(() => {
     let active = true
-    if (!repo) return
-    void Promise.all([repo.listThreads(), repo.listCards()]).then(([t, c]) => {
-      if (!active) return
-      setThreads(t)
-      setCards(c)
+    void load().then((result) => {
+      if (!active || !result) return
+      setThreads(result.threads)
+      setCards(result.cards)
     })
     return () => {
       active = false
     }
-  }, [repo, refreshKey])
+  }, [load, refreshKey])
 
   const onDragEnd = useCallback(
     async (event: DragEndEvent) => {
