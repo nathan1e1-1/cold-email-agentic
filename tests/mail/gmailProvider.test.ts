@@ -111,6 +111,33 @@ describe('GmailProvider', () => {
     expect(new URL(http.requests[0].url).searchParams.get('q')).toContain('in:inbox');
   });
 
+  it('builds an in:trash query when inTrash is set', async () => {
+    const http = router();
+    await provider(http).listThreads({ sinceDays: 30, cap: 20, query: '(from:"a@z.com")', inInbox: false, inTrash: true });
+    const q = new URL(http.requests[0].url).searchParams.get('q') ?? '';
+    expect(q).toContain('in:trash');
+    expect(q).not.toContain('-in:trash');
+  });
+
+  it('gives inTrash precedence over inInbox', async () => {
+    const http = router();
+    await provider(http).listThreads({ sinceDays: 30, cap: 20, inInbox: true, inTrash: true });
+    const q = new URL(http.requests[0].url).searchParams.get('q') ?? '';
+    expect(q).toContain('in:trash');
+    expect(q).not.toContain('in:inbox');
+  });
+
+  it('trashes and untrashes threads', async () => {
+    const http = new FakeHttpClient().onRequest(() => ({ status: 200, body: '{}' }));
+    const p = provider(http);
+    await p.trashThread('t1');
+    await p.untrashThread('t1');
+    expect(http.requests[0].method).toBe('POST');
+    expect(http.requests[0].url).toContain('/threads/t1/trash');
+    expect(http.requests[1].method).toBe('POST');
+    expect(http.requests[1].url).toContain('/threads/t1/untrash');
+  });
+
   it('passes a page token and returns the next one', async () => {
     const http = new FakeHttpClient().onRequest((req) => {
       if (req.url.includes('/threads?')) {

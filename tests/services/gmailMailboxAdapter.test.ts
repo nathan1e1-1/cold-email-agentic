@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { GmailMailboxAdapter } from '../../src/services/gmailMailboxAdapter';
 import type { MailProvider, DraftInput } from '../../src/mail/mailProvider';
 import type { Thread } from '../../src/domain/types';
@@ -48,6 +48,8 @@ function fakeProvider(overrides: Partial<MailProvider> = {}): { provider: MailPr
       return { messageId: 'sent1', threadId: input.threadId ?? 't1' };
     },
     findOwnLatestReply: async () => ({ isReply: false }),
+    trashThread: async () => {},
+    untrashThread: async () => {},
     ...overrides,
   };
   return { provider, sent };
@@ -61,6 +63,17 @@ describe('GmailMailboxAdapter', () => {
     const account = await adapter.connect();
     expect(account.ownEmail).toBe('me@x.com');
     expect(adapter.isConnected()).toBe(true);
+  });
+
+  it('reuses an existing auth unless connect is forced', async () => {
+    const auth = vi.fn(async () => {});
+    const isAuthed = vi.fn(async () => true);
+    const { provider } = fakeProvider({ auth, isAuthed });
+    const adapter = new GmailMailboxAdapter(() => provider);
+    await adapter.connect();
+    expect(auth).not.toHaveBeenCalled();
+    await adapter.connect(true);
+    expect(auth).toHaveBeenCalledTimes(1);
   });
 
   it('lists threads', async () => {
@@ -142,10 +155,51 @@ describe('GmailMailboxAdapter', () => {
       outreachRecipients: ['sarah@acme.com'], pageToken: 'p2',
     });
     expect(seen[0]).toEqual({
-      sinceDays: 30, cap: 20, query: '(from:"sarah@acme.com")', pageToken: 'p2', inInbox: false,
+      sinceDays: 30, cap: 20, query: '(from:"sarah@acme.com")', pageToken: 'p2', inInbox: false, inTrash: false,
     });
     expect(page.nextPageToken).toBe('next');
     expect(page.overflowed).toBeFalsy();
+  });
+
+  it('outreach mode passes inTrash when trashed is set', async () => {
+    const seen: Parameters<MailProvider['listThreads']>[0][] = [];
+    const { provider } = fakeProvider({
+      listThreads: async (opts) => {
+        seen.push(opts);
+        return { threads: [thread], seededHistoryId: '1', nextPageToken: null };
+      },
+    });
+    const adapter = new GmailMailboxAdapter(() => provider);
+    await adapter.connect();
+    await adapter.listThreads({ outreachRecipients: ['sarah@acme.com'], trashed: true });
+    expect(seen[0]).toMatchObject({ inInbox: false, inTrash: true });
+  });
+
+  it('plain path honors trashed', async () => {
+    const seen: Parameters<MailProvider['listThreads']>[0][] = [];
+    const { provider } = fakeProvider({
+      listThreads: async (opts) => {
+        seen.push(opts);
+        return { threads: [thread], seededHistoryId: '1', nextPageToken: null };
+      },
+    });
+    const adapter = new GmailMailboxAdapter(() => provider);
+    await adapter.connect();
+    await adapter.listThreads({ trashed: true });
+    expect(seen[0]).toMatchObject({ inTrash: true, inInbox: false, sinceDays: 30, cap: 20 });
+  });
+
+  it('trashes and untrashes threads through the provider', async () => {
+    const calls: string[] = [];
+    const { provider } = fakeProvider({
+      trashThread: async (id) => { calls.push(`trash:${id}`); },
+      untrashThread: async (id) => { calls.push(`untrash:${id}`); },
+    });
+    const adapter = new GmailMailboxAdapter(() => provider);
+    await adapter.connect();
+    await adapter.trashThread('t1');
+    await adapter.untrashThread('t1');
+    expect(calls).toEqual(['trash:t1', 'untrash:t1']);
   });
 
   it('skips an empty page when a next-page token exists', async () => {
@@ -188,10 +242,10 @@ describe('GmailMailboxAdapter', () => {
     const adapter = new GmailMailboxAdapter(() => provider);
     await adapter.connect();
     const many = Array.from({ length: 500 }, (_, i) => `person${i}@example.com`);
-    const page = await adapter.listThreads({ outreachRecipients: many });
+    const page = await adapter.listThreads({ outreachRecipients: many, trashed: true });
 
     expect(seen.length).toBeGreaterThan(1);
-    expect(seen.every((o) => o.sinceDays === 30 && o.inInbox === false && o.cap > 0)).toBe(true);
+    expect(seen.every((o) => o.sinceDays === 30 && o.inInbox === false && o.inTrash === true && o.cap > 0)).toBe(true);
     expect(page.nextPageToken).toBeNull();
     expect(page.overflowed).toBe(true);
     expect(page.threads.length).toBe(20);

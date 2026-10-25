@@ -24,6 +24,7 @@ export interface Repository {
   getThreadByProviderId(providerThreadId: string): Promise<RepoThread | null>;
   listThreads(): Promise<RepoThread[]>;
   deleteMessages(providerMessageIds: string[]): Promise<void>;
+  deleteThreadByProviderId(providerThreadId: string): Promise<void>;
   upsertMessage(threadRowId: number, m: Message): Promise<void>;
   listMessages(threadRowId: number): Promise<Message[]>;
 

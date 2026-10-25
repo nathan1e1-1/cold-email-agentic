@@ -95,6 +95,17 @@ export class NodeRepository implements Repository {
     });
   }
 
+  async deleteThreadByProviderId(providerThreadId: string): Promise<void> {
+    await this.transaction(async () => {
+      const row = this.one<{ id: number }>('SELECT id FROM threads WHERE provider_thread_id=?', providerThreadId);
+      if (!row) return;
+      this.run('DELETE FROM drafts WHERE card_id IN (SELECT id FROM cards WHERE thread_id=?)', row.id);
+      this.run('DELETE FROM cards WHERE thread_id=?', row.id);
+      this.run('DELETE FROM messages WHERE thread_id=?', row.id);
+      this.run('DELETE FROM threads WHERE id=?', row.id);
+    });
+  }
+
   async upsertMessage(threadRowId: number, m: Message): Promise<void> {
     this.run(
       `INSERT INTO messages (thread_id,provider_message_id,rfc_message_id,references_json,
@@ -227,11 +238,7 @@ export class NodeRepository implements Repository {
         GROUP BY lower(to_email)
         ORDER BY last_sent_at DESC`,
     );
-    const account = await this.getAccount();
-    const own = account ? normEmail(account.ownEmail) : null;
-    return rows
-      .map((r) => ({ email: normEmail(r.email), lastSentAt: Number(r.last_sent_at) }))
-      .filter((r) => r.email !== own);
+    return rows.map((r) => ({ email: normEmail(r.email), lastSentAt: Number(r.last_sent_at) }));
   }
 
   async countSendsSince(sinceTs: number, kind: SendKind): Promise<number> {

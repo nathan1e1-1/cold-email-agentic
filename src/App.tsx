@@ -9,6 +9,7 @@ import { createAiProvider, createMailboxProvider } from './services/providerFact
 import { Sidebar, type ActivityItem, type View } from './components/Sidebar'
 import { DashboardView } from './views/DashboardView'
 import { SettingsView } from './views/SettingsView'
+import { TrashView } from './views/TrashView'
 import { BoardView } from './views/BoardView'
 import { ensureCardForThread } from './services/kanban'
 import { loadSettings } from './services/appSettings'
@@ -23,6 +24,7 @@ const VIEW_TITLE: Record<View, string> = {
   board: 'Board',
   inbox: 'Inbox',
   dashboard: 'Dashboard',
+  trash: 'Trash',
   settings: 'Settings',
 }
 
@@ -35,6 +37,9 @@ function loadCollapsed(): boolean {
     return false
   }
 }
+
+const isPermissionError = (msg: string) => /40[13]|insufficient|permission/i.test(msg)
+const RECONNECT_HINT = 'Reconnect Gmail in Settings to enable deleting, then try again.'
 
 async function persistThreads(r: Repository, acc: Account, list: Thread[]): Promise<void> {
   const accountRow = await r.upsertAccount({
@@ -60,6 +65,12 @@ function App() {
   const [account, setAccount] = useState<Account | null>(null)
   const [threads, setThreads] = useState<Thread[]>([])
   const [nextPageToken, setNextPageToken] = useState<string | null>(null)
+  const [trashThreads, setTrashThreads] = useState<Thread[]>([])
+  const [trashToken, setTrashToken] = useState<string | null>(null)
+  const [trashBusy, setTrashBusy] = useState(false)
+  const [trashActionBusy, setTrashActionBusy] = useState(false)
+  const [trashLoaded, setTrashLoaded] = useState(false)
+  const [trashOverflowed, setTrashOverflowed] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [selected, setSelected] = useState<Thread | null>(null)
@@ -136,13 +147,19 @@ function App() {
     return box.listThreads({ pageToken, outreachRecipients: recipients })
   }, [])
 
+  const fetchTrash = useCallback(async (pageToken?: string): Promise<ThreadPage | null> => {
+    if (!mailbox || !repo) return null
+    const recipients = recentRecipientEmails(await repo.listColdRecipients(), Date.now())
+    return mailbox.listThreads({ pageToken, outreachRecipients: recipients, trashed: true })
+  }, [mailbox, repo])
+
   const openThreadById = useCallback((threadId: string) => {
     setComposing(false)
     setView('inbox')
     if (mailbox) void openThread(mailbox, threadId)
   }, [mailbox, openThread])
 
-  const connect = useCallback(async () => {
+  const connect = useCallback(async (force = false) => {
     const request = ++inboxRequestRef.current
     setError(null); setStatus(null); setThreads([]); setSelected(null); setSelectedId(null); setNextPageToken(null)
     setInboxOverflowed(false)
@@ -150,7 +167,7 @@ function App() {
     setBusy('Connecting to Gmail…')
     try {
       const box = await createMailboxProvider()
-      const acc = await box.connect()
+      const acc = await box.connect(force)
       let aiProvider: AiProvider | null = null
       try {
         aiProvider = await createAiProvider()
@@ -207,6 +224,25 @@ function App() {
     return () => { active = false }
   }, [])
 
+  useEffect(() => {
+    if (view !== 'trash' || !mailbox || !repo) return
+    let active = true
+    void fetchTrash()
+      .then((page) => {
+        if (!active || !page) return
+        setTrashThreads(page.threads)
+        setTrashToken(page.nextPageToken)
+        setTrashOverflowed(page.overflowed ?? false)
+        setTrashLoaded(true)
+      })
+      .catch((err) => {
+        if (!active) return
+        setError(err instanceof Error ? err.message : String(err))
+        setTrashLoaded(true)
+      })
+    return () => { active = false }
+  }, [view, mailbox, repo, fetchTrash])
+
   const onColdSent = useCallback((subject: string, to: string, duplicate: boolean, close: boolean) => {
     pushActivity({ kind: 'sent', subject, at: Date.now(), threadId: null })
     setStatus(`Sent to ${to}${duplicate ? ' (you had emailed this address before)' : ''}`)
@@ -222,8 +258,13 @@ function App() {
 
   const navigate = useCallback((next: View) => {
     if (next !== 'inbox') setComposing(false)
+    if (next === 'trash' && view !== 'trash') {
+      setTrashBusy(false)
+      setTrashLoaded(false)
+      setError(null)
+    }
     setView(next)
-  }, [])
+  }, [view])
 
   const onSend = useCallback(async () => {
     if (!mailbox || !selected || draft.trim() === '') return
@@ -283,6 +324,70 @@ function App() {
       if (request === inboxRequestRef.current) setBusy(null)
     }
   }, [mailbox, repo, account, nextPageToken, fetchInbox])
+
+  const loadMoreTrash = useCallback(async () => {
+    if (!trashToken || trashBusy) return
+    setTrashBusy(true)
+    try {
+      const page = await fetchTrash(trashToken)
+      if (!page) return
+      setTrashThreads((prev) => [...prev, ...page.threads])
+      setTrashToken(page.nextPageToken)
+      setTrashOverflowed(page.overflowed ?? false)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setTrashBusy(false)
+    }
+  }, [trashToken, trashBusy, fetchTrash])
+
+  const trashSelected = useCallback(async () => {
+    if (!mailbox || !repo || !selected || trashActionBusy) return
+    const targetId = selected.id
+    setTrashActionBusy(true)
+    setError(null)
+    try {
+      await mailbox.trashThread(targetId)
+      await repo.deleteThreadByProviderId(targetId)
+      setThreads((prev) => prev.filter((t) => t.id !== targetId))
+      setSelected((cur) => (cur?.id === targetId ? null : cur))
+      setSelectedId((cur) => (cur === targetId ? null : cur))
+      setActivity((prev) => prev.filter((a) => a.threadId !== targetId))
+      setStatus('Moved to Trash')
+      setBoardVersion((v) => v + 1)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      setError(isPermissionError(msg) ? RECONNECT_HINT : msg)
+    } finally {
+      setTrashActionBusy(false)
+    }
+  }, [mailbox, repo, selected, trashActionBusy])
+
+  const restoreThread = useCallback(async (id: string) => {
+    if (!mailbox || !repo || trashActionBusy) return
+    const request = inboxRequestRef.current
+    setError(null)
+    setTrashActionBusy(true)
+    try {
+      await mailbox.untrashThread(id)
+      setTrashThreads((prev) => prev.filter((t) => t.id !== id))
+      const page = await fetchInbox(mailbox, repo)
+      if (request !== inboxRequestRef.current) return
+      setThreads(page.threads)
+      setNextPageToken(page.nextPageToken)
+      setInboxOverflowed(page.overflowed ?? false)
+      if (account) {
+        await persistThreads(repo, account, page.threads)
+        setBoardVersion((v) => v + 1)
+      }
+      setStatus('Restored to Inbox')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      setError(isPermissionError(msg) ? RECONNECT_HINT : msg)
+    } finally {
+      setTrashActionBusy(false)
+    }
+  }, [mailbox, repo, account, fetchInbox, trashActionBusy])
 
   const promptText = useMemo(() => {
     if (!selected) return null
@@ -357,6 +462,19 @@ function App() {
             />
           )}
 
+          {view === 'trash' && (
+            <TrashView
+              threads={trashThreads}
+              busy={trashActionBusy || trashBusy || busy !== null}
+              ready={mailbox !== null && repo !== null}
+              loading={!trashLoaded}
+              overflowed={trashOverflowed}
+              hasMore={trashToken !== null}
+              onLoadMore={() => void loadMoreTrash()}
+              onRestore={(id) => void restoreThread(id)}
+            />
+          )}
+
           {view === 'inbox' && (
             <div className="workspace">
               <ThreadList
@@ -386,7 +504,7 @@ function App() {
                   />
                 ) : selected ? (
                   <>
-                    <ReaderPane thread={selected} />
+                    <ReaderPane thread={selected} onTrash={() => void trashSelected()} trashBusy={trashActionBusy} />
                     <DraftPanel
                       ai={ai}
                       generating={generating}
@@ -415,7 +533,7 @@ function App() {
           )}
 
           {view === 'settings' && (
-            <SettingsView onSaved={() => { setSignature(loadSettings().signature); void connect() }} />
+            <SettingsView onSaved={() => { setSignature(loadSettings().signature); void connect() }} onReconnect={() => void connect(true)} />
           )}
         </div>
       </div>

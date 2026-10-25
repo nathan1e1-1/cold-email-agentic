@@ -31,6 +31,8 @@ function fakeProvider(overrides: Partial<MailProvider> = {}): MailProvider {
     listHistoryChanges: async () => ({ changedThreadIds: [], deletedThreadIds: [], nextHistoryId: '1000', expired: false }),
     send: async () => ({ messageId: 'm', threadId: 't' }),
     findOwnLatestReply: async () => ({ isReply: false }),
+    trashThread: async () => {},
+    untrashThread: async () => {},
     ...overrides,
   };
 }

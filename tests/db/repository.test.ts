@@ -110,6 +110,55 @@ describe('NodeRepository', () => {
     expect(m.bodyHtml).toBe('<p>hello</p>');
   });
 
+  it('deletes a thread with its drafts, messages, and card, leaving others intact', async () => {
+    const repo = mk();
+    const acc = await seedAccount(repo);
+    const first = await seedThread(repo, acc.rowId, 'thr1');
+    const second = await seedThread(repo, acc.rowId, 'thr2', 2);
+    await repo.upsertMessage(first.rowId, {
+      id: 'm1',
+      rfcMessageId: '<m1@x>',
+      references: ['<m0@x>'],
+      from: { name: 'Sarah', email: 'sarah@acme.com' },
+      to: [{ name: 'Me', email: 'me@x.com' }],
+      cc: [{ email: 'cc@x.com' }],
+      subject: 'Hi',
+      bodyText: 'hello',
+      bodyHtml: '<p>hello</p>',
+      hasListUnsubscribe: false,
+      date: 5,
+      direction: 'inbound',
+    });
+    await repo.upsertMessage(second.rowId, {
+      id: 'm2',
+      rfcMessageId: '<m2@x>',
+      references: [],
+      from: { email: 'other@y.com' },
+      to: [{ email: 'me@x.com' }],
+      cc: [],
+      subject: 'Other',
+      bodyText: 'keep me',
+      hasListUnsubscribe: false,
+      date: 6,
+      direction: 'inbound',
+    });
+    const firstCard = await repo.createCard(first.rowId, 'untouched', 1);
+    const secondCard = await repo.createCard(second.rowId, 'untouched', 2);
+    await repo.createDraft({
+      cardId: firstCard.id, contactId: null, body: 'a', model: 'gemini',
+      tone: 'professional', instruction: '', createdAt: 1,
+    });
+
+    await repo.deleteThreadByProviderId('thr1');
+
+    expect((await repo.listThreads()).map((t) => t.id)).toEqual(['thr2']);
+    expect(await repo.listMessages(first.rowId)).toEqual([]);
+    expect((await repo.listMessages(second.rowId)).map((m) => m.id)).toEqual(['m2']);
+    expect((await repo.listCards()).map((c) => c.id)).toEqual([secondCard.id]);
+    expect(await repo.listDrafts(firstCard.id)).toEqual([]);
+    await expect(repo.deleteThreadByProviderId('missing')).resolves.toBeUndefined();
+  });
+
   it('creates and moves cards, and chooses a draft', async () => {
     const repo = mk();
     const acc = await seedAccount(repo);
@@ -209,7 +258,7 @@ describe('NodeRepository', () => {
     expect(await repo.hasColdSendTo('replyonly@z.com')).toBe(false);
   });
 
-  it('lists distinct cold recipients, newest first, excluding the account address', async () => {
+  it('lists distinct cold recipients, newest first, including the account address', async () => {
     const repo = mk();
     await repo.upsertAccount({ provider: 'gmail', email: 'Me@X.com', ownEmail: 'Me@X.com',
       tokenRef: 't', createdAt: 1 });
@@ -220,6 +269,7 @@ describe('NodeRepository', () => {
     await repo.recordSend(5000, 'cold', ' ME@X.COM ', 'thr-self');
 
     expect(await repo.listColdRecipients()).toEqual([
+      { email: 'me@x.com', lastSentAt: 5000 },
       { email: 'a@z.com', lastSentAt: 3000 },
       { email: 'b@z.com', lastSentAt: 2000 },
     ]);

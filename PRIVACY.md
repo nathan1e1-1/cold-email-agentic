@@ -11,6 +11,7 @@ With your authorization, the app connects to your Google account and:
 
 - reads your Gmail threads (`gmail.readonly`);
 - sends email that you compose or confirm (`gmail.send`);
+- moves threads to Trash and restores them when you ask (`gmail.modify`);
 - reads your email address (`userinfo.email`).
 
 ## Where your data lives

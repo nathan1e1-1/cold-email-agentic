@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { loadSettings, saveSettings, SECRET_KEYS, type StoredSettings } from '../services/appSettings'
 import { setSecret } from '../services/secrets'
 
-export function SettingsView({ onSaved }: { onSaved: () => void }) {
+export function SettingsView({ onSaved, onReconnect }: { onSaved: () => void; onReconnect: () => void }) {
   const [settings, setSettings] = useState<StoredSettings>(loadSettings())
   const [clientSecret, setClientSecret] = useState('')
   const [geminiKey, setGeminiKey] = useState('')
@@ -53,6 +53,7 @@ export function SettingsView({ onSaved }: { onSaved: () => void }) {
           <span>OAuth redirect URI</span>
           <input value={settings.redirectUri} onChange={(e) => setSettings({ ...settings, redirectUri: e.target.value })} />
         </label>
+        <button type="button" className="chip ghost" onClick={onReconnect}>Reconnect Gmail</button>
       </div>
 
       <div className="card settings-card">

@@ -6,6 +6,7 @@ const AUTH_ENDPOINT = 'https://accounts.google.com/o/oauth2/v2/auth';
 export const DEFAULT_SCOPES = [
   'https://www.googleapis.com/auth/gmail.readonly',
   'https://www.googleapis.com/auth/gmail.send',
+  'https://www.googleapis.com/auth/gmail.modify',
   'https://www.googleapis.com/auth/userinfo.email',
 ];
 

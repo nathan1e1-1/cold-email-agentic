@@ -107,10 +107,13 @@ export class GmailProvider implements MailProvider {
 
   async listThreads(opts: {
     sinceDays: number; cap: number; query?: string; pageToken?: string; inInbox?: boolean;
+    inTrash?: boolean;
   }): Promise<ListThreadsResult> {
-    const base = opts.inInbox === false
-      ? [`newer_than:${opts.sinceDays}d`, '-in:spam', '-in:trash']
-      : [`in:inbox newer_than:${opts.sinceDays}d`];
+    const base = opts.inTrash
+      ? [`in:trash newer_than:${opts.sinceDays}d`]
+      : opts.inInbox === false
+        ? [`newer_than:${opts.sinceDays}d`, '-in:spam', '-in:trash']
+        : [`in:inbox newer_than:${opts.sinceDays}d`];
     const q = encodeURIComponent([base.join(' '), opts.query].filter(Boolean).join(' '));
     const page = opts.pageToken ? `&pageToken=${encodeURIComponent(opts.pageToken)}` : '';
     const res = await this.request('GET', `/threads?q=${q}&maxResults=${opts.cap}${page}`);
@@ -194,5 +197,13 @@ export class GmailProvider implements MailProvider {
     const thread = await this.getThread(threadId);
     const last = thread.messages[thread.messages.length - 1];
     return { isReply: last?.direction === 'outbound' };
+  }
+
+  async trashThread(id: string): Promise<void> {
+    ensureOk(await this.request('POST', `/threads/${encodeURIComponent(id)}/trash`), 'Gmail trash');
+  }
+
+  async untrashThread(id: string): Promise<void> {
+    ensureOk(await this.request('POST', `/threads/${encodeURIComponent(id)}/untrash`), 'Gmail untrash');
   }
 }

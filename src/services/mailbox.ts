@@ -17,6 +17,7 @@ export interface ThreadQueryOptions {
   pageToken?: string;
   /** Present → outreach mode. Empty array means "no cold recipients yet". */
   outreachRecipients?: string[];
+  trashed?: boolean;
 }
 
 export interface SentNewEmail {
@@ -25,10 +26,12 @@ export interface SentNewEmail {
 }
 
 export interface MailboxProvider {
-  connect(): Promise<Account>;
+  connect(force?: boolean): Promise<Account>;
   isConnected(): boolean;
   listThreads(opts?: ThreadQueryOptions): Promise<ThreadPage>;
   getThread(id: string): Promise<Thread | null>;
   send(threadId: string, body: string): Promise<Message>;
   sendNew(input: NewEmailInput): Promise<SentNewEmail>;
+  trashThread(id: string): Promise<void>;
+  untrashThread(id: string): Promise<void>;
 }

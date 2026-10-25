@@ -6,9 +6,22 @@ function addr(a: Address): string {
   return a.name ? `${a.name} <${a.email}>` : a.email
 }
 
-export function ReaderPane({ thread }: { thread: Thread }) {
+export function ReaderPane({ thread, onTrash, trashBusy }: { thread: Thread; onTrash?: () => void; trashBusy?: boolean }) {
   return (
     <div className="email-thread">
+      {onTrash && (
+        <div className="reader-actions">
+          <button
+            type="button"
+            className="chip ghost danger"
+            disabled={trashBusy}
+            aria-label="Move conversation to Trash"
+            onClick={onTrash}
+          >
+            Trash
+          </button>
+        </div>
+      )}
       {thread.messages.map((m) => {
         const who = m.direction === 'outbound' ? 'You' : m.from.name ?? m.from.email
         return (

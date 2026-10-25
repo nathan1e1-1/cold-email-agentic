@@ -19,9 +19,9 @@ export class GmailMailboxAdapter implements MailboxProvider {
     this.createProvider = createProvider;
   }
 
-  async connect(): Promise<Account> {
+  async connect(force = false): Promise<Account> {
     const bootstrap = this.createProvider('');
-    if (!(await bootstrap.isAuthed())) await bootstrap.auth();
+    if (force || !(await bootstrap.isAuthed())) await bootstrap.auth();
     const profile = await bootstrap.getProfile();
     this.provider = this.createProvider(profile.emailAddress);
     this.account = {
@@ -47,8 +47,13 @@ export class GmailMailboxAdapter implements MailboxProvider {
     const recipients = opts?.outreachRecipients;
 
     if (recipients === undefined) {
+      const trashed = opts?.trashed === true;
       const page = await provider.listThreads({
-        sinceDays: 90, cap: 20, pageToken: opts?.pageToken,
+        sinceDays: trashed ? OUTREACH_WINDOW_DAYS : 90,
+        cap: 20,
+        inInbox: !trashed,
+        inTrash: trashed,
+        pageToken: opts?.pageToken,
       });
       return { threads: page.threads, nextPageToken: page.nextPageToken ?? null };
     }
@@ -56,9 +61,11 @@ export class GmailMailboxAdapter implements MailboxProvider {
     const query = buildOutreachQuery(recipients);
     if (!query) return { threads: [], nextPageToken: null };
 
+    const inTrash = opts?.trashed ?? false;
+
     if (query.length <= OUTREACH_QUERY_BUDGET) {
       const args = {
-        sinceDays: OUTREACH_WINDOW_DAYS, cap: OUTREACH_CAP, query, inInbox: false,
+        sinceDays: OUTREACH_WINDOW_DAYS, cap: OUTREACH_CAP, query, inInbox: false, inTrash,
       };
       let page = await provider.listThreads({ ...args, pageToken: opts?.pageToken });
       // A page can be empty while a token exists; skip up to 3 dead pages.
@@ -75,7 +82,7 @@ export class GmailMailboxAdapter implements MailboxProvider {
     for (const chunk of queries) {
       if (merged.length >= OUTREACH_CAP) break;
       const { threads } = await provider.listThreads({
-        sinceDays: OUTREACH_WINDOW_DAYS, cap: perChunk, query: chunk, inInbox: false,
+        sinceDays: OUTREACH_WINDOW_DAYS, cap: perChunk, query: chunk, inInbox: false, inTrash,
       });
       for (const thread of threads) {
         if (seen.has(thread.id)) continue;
@@ -127,6 +134,14 @@ export class GmailMailboxAdapter implements MailboxProvider {
       date: Date.now(),
       direction: 'outbound',
     };
+  }
+
+  async trashThread(id: string): Promise<void> {
+    await this.requireProvider().trashThread(id);
+  }
+
+  async untrashThread(id: string): Promise<void> {
+    await this.requireProvider().untrashThread(id);
   }
 
   async sendNew(input: NewEmailInput): Promise<SentNewEmail> {

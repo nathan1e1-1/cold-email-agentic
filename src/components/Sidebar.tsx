@@ -1,7 +1,7 @@
 import type { Account, TonePreset } from '../domain/types'
 import { formatDate } from '../lib/format'
 
-export type View = 'inbox' | 'board' | 'dashboard' | 'settings'
+export type View = 'inbox' | 'board' | 'dashboard' | 'trash' | 'settings'
 
 export interface ActivityItem {
   id: number
@@ -50,6 +50,16 @@ function NavIcon({ name }: { name: View }) {
       </svg>
     )
   }
+  if (name === 'trash') {
+    return (
+      <svg {...common} aria-hidden="true">
+        <polyline points="3 6 5 6 21 6" />
+        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+        <path d="M10 11v6M14 11v6" />
+        <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+      </svg>
+    )
+  }
   return (
     <svg {...common} aria-hidden="true">
       <line x1="4" y1="7" x2="20" y2="7" />
@@ -82,6 +92,7 @@ const NAV: { id: View; label: string }[] = [
   { id: 'inbox', label: 'Inbox' },
   { id: 'board', label: 'Board' },
   { id: 'dashboard', label: 'Dashboard' },
+  { id: 'trash', label: 'Trash' },
 ]
 
 interface Props {

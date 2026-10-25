@@ -35,10 +35,13 @@ export interface MailProvider {
   getProfile(): Promise<GmailProfile>;
   listThreads(opts: {
     sinceDays: number; cap: number; query?: string; pageToken?: string; inInbox?: boolean;
+    inTrash?: boolean;
   }): Promise<ListThreadsResult>;
   getThread(id: string): Promise<Thread>;
   getThreadsByIds(ids: string[]): Promise<Thread[]>;
   listHistoryChanges(opts: { historyId: string }): Promise<HistoryDelta>;
   send(input: DraftInput): Promise<{ messageId: string; threadId: string }>;
   findOwnLatestReply(threadId: string): Promise<{ isReply: boolean }>;
+  trashThread(id: string): Promise<void>;
+  untrashThread(id: string): Promise<void>;
 }
