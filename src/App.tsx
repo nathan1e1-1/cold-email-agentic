@@ -5,6 +5,7 @@ import type { AiProvider } from './ai/aiProvider'
 import { buildSystemPrompt, buildUserPrompt } from './ai/prompt'
 import type { MailboxProvider, ThreadPage } from './services/mailbox'
 import { excludeOwnEmail, isOutreachThread, recentRecipientEmails } from './mail/outreach'
+import { AUTO_REFRESH_TICK_MS, shouldAutoRefresh } from './mail/autoRefresh'
 import { createAiProvider, createMailboxProvider } from './services/providerFactory'
 import { Sidebar, type ActivityItem, type View } from './components/Sidebar'
 import { DashboardView } from './views/DashboardView'
@@ -91,6 +92,13 @@ function App() {
   const inboxRequestRef = useRef(0)
   const loadingMoreRef = useRef(false)
   const activityIdRef = useRef(0)
+  const selectedIdRef = useRef<string | null>(null)
+  const autoBusyRef = useRef(false)
+  const lastAutoRefreshRef = useRef(0)
+  const busyRef = useRef<string | null>(null)
+
+  useEffect(() => { selectedIdRef.current = selectedId }, [selectedId])
+  useEffect(() => { busyRef.current = busy }, [busy])
 
   const pushActivity = useCallback((item: Omit<ActivityItem, 'id'>) => {
     activityIdRef.current += 1
@@ -246,6 +254,50 @@ function App() {
     startedRef.current = true
     void connect()
   }, [connect])
+
+  // Silent auto-refresh: poll while visible (throttled) and refresh on focus,
+  // so replies appear without the user pressing Refresh. Never shows a spinner
+  // and never clears the current selection or draft.
+  useEffect(() => {
+    if (!mailbox || !repo) return
+    let active = true
+
+    const tick = async () => {
+      const visibility = typeof document !== 'undefined' ? document.visibilityState : 'visible'
+      if (busyRef.current) return
+      if (!shouldAutoRefresh(visibility, lastAutoRefreshRef.current, Date.now(), autoBusyRef.current)) return
+      autoBusyRef.current = true
+      lastAutoRefreshRef.current = Date.now()
+      try {
+        const page = await fetchInbox(mailbox, repo, undefined, testMode)
+        if (!active) return
+        setThreads(page.threads)
+        setNextPageToken(page.nextPageToken)
+        setInboxOverflowed(page.overflowed ?? false)
+        const id = selectedIdRef.current
+        if (id) {
+          const refreshed = await mailbox.getThread(id)
+          if (active && refreshed) setSelected(refreshed)
+        }
+      } catch {
+        /* silent: a manual Refresh surfaces the error */
+      } finally {
+        autoBusyRef.current = false
+      }
+    }
+
+    const interval = window.setInterval(() => void tick(), AUTO_REFRESH_TICK_MS)
+    const onFocus = () => void tick()
+    const onVisibility = () => { if (document.visibilityState === 'visible') void tick() }
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      active = false
+      window.clearInterval(interval)
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [mailbox, repo, fetchInbox, testMode])
 
   useEffect(() => {
     let active = true
