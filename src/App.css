@@ -1745,7 +1745,7 @@
   gap: 10px;
 }
 
-.board .card {
+.board-card {
   padding: 0;
   overflow: hidden;
   background: var(--surface);
@@ -1753,30 +1753,38 @@
   border-left: 3px solid var(--border-strong);
   border-radius: 10px;
   box-shadow: var(--shadow-sm);
-  transition: box-shadow 150ms ease, transform 150ms ease;
+  transition: box-shadow 150ms ease;
 }
 
-.board .card.card-untouched {
+.board-card.card-untouched {
   border-left-color: #94a3b8;
 }
 
-.board .card.card-review {
+.board-card.card-review {
   border-left-color: #f59e0b;
 }
 
-.board .card.card-sent {
+.board-card.card-sent {
   border-left-color: var(--primary);
 }
 
-.board .card:hover {
+.board-card:hover {
   box-shadow: var(--shadow-md);
   transform: translateY(-1px);
 }
 
-.board .card.dragging {
-  opacity: 0.65;
-  z-index: 10;
+.board-card.dragging {
+  opacity: 0.35;
+}
+
+/* The card rendered in dnd-kit's fixed overlay; must not inherit hover lift
+   or transform transitions or it lags behind the pointer. */
+.drag-overlay-card {
+  pointer-events: none;
+  transform: none !important;
+  transition: none !important;
   box-shadow: var(--shadow-md);
+  cursor: grabbing;
 }
 
 .card-open {

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
-  DndContext, PointerSensor, useDraggable, useDroppable, useSensor, useSensors,
-  type DragEndEvent,
+  DndContext, DragOverlay, PointerSensor, useDraggable, useDroppable, useSensor, useSensors,
+  type DragCancelEvent, type DragEndEvent, type DragStartEvent,
 } from '@dnd-kit/core'
 import { CARD_STATUSES, type Card, type CardStatus } from '../domain/types'
 import type { RepoThread, Repository } from '../db/repository'
@@ -20,28 +20,35 @@ function threadLabel(thread: RepoThread | undefined): string {
   return other?.name ?? other?.email ?? ''
 }
 
+function CardFace({ thread, onOpenThread }: {
+  thread: RepoThread | undefined
+  onOpenThread: (threadId: string) => void
+}) {
+  return (
+    <button type="button" className="card-open" onClick={() => thread && onOpenThread(thread.id)}>
+      <span className="card-subject">{thread?.subject || '(no subject)'}</span>
+      <span className="card-meta">
+        {threadLabel(thread)}
+        {thread?.lastMessageAt ? ` · ${new Date(thread.lastMessageAt).toLocaleDateString()}` : ''}
+      </span>
+    </button>
+  )
+}
+
 function CardItem({ card, thread, onOpenThread }: {
   card: Card
   thread: RepoThread | undefined
   onOpenThread: (threadId: string) => void
 }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: card.id })
-  const style = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : undefined
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: card.id })
   return (
     <article
       ref={setNodeRef}
-      style={style}
-      className={isDragging ? `card card-${card.status} dragging` : `card card-${card.status}`}
+      className={`card board-card card-${card.status}${isDragging ? ' dragging' : ''}`}
       {...listeners}
       {...attributes}
     >
-      <button type="button" className="card-open" onClick={() => thread && onOpenThread(thread.id)}>
-        <span className="card-subject">{thread?.subject || '(no subject)'}</span>
-        <span className="card-meta">
-          {threadLabel(thread)}
-          {thread?.lastMessageAt ? ` · ${new Date(thread.lastMessageAt).toLocaleDateString()}` : ''}
-        </span>
-      </button>
+      <CardFace thread={thread} onOpenThread={onOpenThread} />
     </article>
   )
 }
@@ -81,6 +88,7 @@ interface Props {
 export function BoardView({ repo, onOpenThread, refreshKey }: Props) {
   const [threads, setThreads] = useState<RepoThread[]>([])
   const [cards, setCards] = useState<Card[]>([])
+  const [activeId, setActiveId] = useState<number | null>(null)
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
 
   const load = useCallback(async () => (repo ? loadBoard(repo) : null), [repo])
@@ -104,8 +112,17 @@ export function BoardView({ repo, onOpenThread, refreshKey }: Props) {
     }
   }, [load, refreshKey])
 
+  const onDragStart = useCallback((event: DragStartEvent) => {
+    setActiveId(Number(event.active.id))
+  }, [])
+
+  const onDragCancel = useCallback((_event: DragCancelEvent) => {
+    setActiveId(null)
+  }, [])
+
   const onDragEnd = useCallback(
     async (event: DragEndEvent) => {
+      setActiveId(null)
       if (!repo || !event.over) return
       const cardId = Number(event.active.id)
       const status = event.over.id as CardStatus
@@ -117,10 +134,16 @@ export function BoardView({ repo, onOpenThread, refreshKey }: Props) {
 
   const threadByRowId = new Map(threads.map((t) => [t.rowId, t]))
   const grouped = groupCardsByStatus(cards)
+  const activeCard = activeId == null ? null : cards.find((c) => c.id === activeId) ?? null
 
   return (
     <div className="board">
-      <DndContext sensors={sensors} onDragEnd={onDragEnd}>
+      <DndContext
+        sensors={sensors}
+        onDragStart={onDragStart}
+        onDragEnd={onDragEnd}
+        onDragCancel={onDragCancel}
+      >
         {CARD_STATUSES.map((status) => (
           <Column
             key={status}
@@ -130,6 +153,18 @@ export function BoardView({ repo, onOpenThread, refreshKey }: Props) {
             onOpenThread={onOpenThread}
           />
         ))}
+        {/* Fixed-position overlay: the moving card must escape the columns'
+            overflow contexts, or it slides under the other drop areas. */}
+        <DragOverlay dropAnimation={null}>
+          {activeCard ? (
+            <article className={`card board-card card-${activeCard.status} drag-overlay-card`}>
+              <CardFace
+                thread={threadByRowId.get(activeCard.threadRowId)}
+                onOpenThread={onOpenThread}
+              />
+            </article>
+          ) : null}
+        </DragOverlay>
       </DndContext>
     </div>
   )
