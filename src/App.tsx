@@ -19,6 +19,7 @@ import { ThreadList } from './components/ThreadList'
 import { ComposePanel } from './components/ComposePanel'
 import { ReaderPane } from './components/ReaderPane'
 import { DraftPanel } from './components/DraftPanel'
+import { initials } from './lib/format'
 
 const VIEW_TITLE: Record<View, string> = {
   board: 'Board',
@@ -432,10 +433,20 @@ function App() {
           <span className="view-heading">{VIEW_TITLE[view]}</span>
           <div className="topbar-right">
             {draftsThisSession > 0 && <span className="badge">{draftsThisSession} drafts</span>}
-            <label className="toggle">
+            <span className={account ? 'topbar-status connected' : 'topbar-status'}>
+              <span className="status-dot" aria-hidden="true" />
+              {account ? 'Synced' : 'Not connected'}
+            </span>
+            <label className="toggle switch">
               <input type="checkbox" checked={testMode} onChange={(e) => setTestMode(e.target.checked)} />
-              Test mode
+              <span className="switch-track" aria-hidden="true">
+                <span className="switch-thumb" />
+              </span>
+              <span className="switch-label">Test mode</span>
             </label>
+            <span className="topbar-avatar" aria-hidden="true" title={account?.email ?? 'Not connected'}>
+              {initials(account?.email ?? 'ColdEmailAgentic')}
+            </span>
           </div>
         </header>
 

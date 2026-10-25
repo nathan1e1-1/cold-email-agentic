@@ -31,12 +31,21 @@ export function SettingsView({ onSaved, onReconnect }: { onSaved: () => void; on
   }
 
   return (
-    <div className="view">
-      <h1 className="view-title">Settings</h1>
-      <p className="view-sub">Credentials, AI keys, and writing preferences. Secrets are stored locally in a 0600 file on this Mac.</p>
+    <div className="view settings-view">
+      <header className="page-head">
+        <div className="page-head-main">
+          <h1 className="view-title">Settings</h1>
+          <p className="view-sub">Credentials, AI keys, and writing preferences. Secrets are stored locally in a 0600 file on this Mac.</p>
+        </div>
+      </header>
 
       <div className="card settings-card">
-        <div className="card-head"><span className="card-title">Gmail</span></div>
+        <div className="card-head">
+          <div className="card-head-main">
+            <span className="card-title">Gmail</span>
+            <span className="card-sub">OAuth credentials for sending and syncing</span>
+          </div>
+        </div>
         <label className="field">
           <span>Google Client ID</span>
           <input
@@ -53,11 +62,18 @@ export function SettingsView({ onSaved, onReconnect }: { onSaved: () => void; on
           <span>OAuth redirect URI</span>
           <input value={settings.redirectUri} onChange={(e) => setSettings({ ...settings, redirectUri: e.target.value })} />
         </label>
-        <button type="button" className="chip ghost" onClick={onReconnect}>Reconnect Gmail</button>
+        <div className="settings-actions">
+          <button type="button" className="btn btn-secondary" onClick={onReconnect}>Reconnect Gmail</button>
+        </div>
       </div>
 
       <div className="card settings-card">
-        <div className="card-head"><span className="card-title">AI drafter</span></div>
+        <div className="card-head">
+          <div className="card-head-main">
+            <span className="card-title">AI drafter</span>
+            <span className="card-sub">Choose the model that writes your replies</span>
+          </div>
+        </div>
         <label className="field">
           <span>Provider</span>
           <select
@@ -79,7 +95,12 @@ export function SettingsView({ onSaved, onReconnect }: { onSaved: () => void; on
       </div>
 
       <div className="card settings-card">
-        <div className="card-head"><span className="card-title">Writing</span></div>
+        <div className="card-head">
+          <div className="card-head-main">
+            <span className="card-title">Writing</span>
+            <span className="card-sub">Defaults applied to generated drafts</span>
+          </div>
+        </div>
         <label className="field">
           <span>Signature <em>· appended to generated drafts</em></span>
           <input

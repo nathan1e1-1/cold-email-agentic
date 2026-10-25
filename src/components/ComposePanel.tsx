@@ -134,9 +134,9 @@ export function ComposePanel({ ai, mailbox, repo, ownEmail, signature, testMode,
           <span>Why are you reaching out? <em>optional</em></span>
           <input value={context} onChange={(e) => setContext(e.target.value)} placeholder="met at the AI meetup; want to ask about their agent tooling" />
         </label>
-        <div className="tones">
+        <div className="tones" role="group" aria-label="Tone">
           {TONE_PRESETS.map((t) => (
-            <button key={t} type="button" className={t === tone ? 'tone active' : 'tone'} disabled={generating} onClick={() => setTone(t)}>
+            <button key={t} type="button" className={t === tone ? 'tone active' : 'tone'} disabled={generating} aria-pressed={t === tone} onClick={() => setTone(t)}>
               {t}
             </button>
           ))}
@@ -148,7 +148,7 @@ export function ComposePanel({ ai, mailbox, repo, ownEmail, signature, testMode,
         <textarea className="draft-text" aria-label="Body" value={body} onChange={(e) => setBody(e.target.value)} placeholder="Click Generate to draft a first-touch email…" rows={8} />
         <div className="draft-controls">
           <input className="instruction" value={instruction} onChange={(e) => setInstruction(e.target.value)} placeholder="Nudge: shorter, warmer, ask a question…" />
-          <button type="button" className="chip ghost" disabled={sending} onClick={onCancel}>Cancel</button>
+          <button type="button" className="btn btn-ghost btn-sm" disabled={sending} onClick={onCancel}>Cancel</button>
           <button type="button" className="regen" disabled={generating || !ai} onClick={() => void generate(body || undefined)}>Generate</button>
           <button type="button" className="send" disabled={!mailbox || !repo || sending || generating || testMode || !to.trim() || !body.trim()} onClick={() => void send()}>{sending ? 'Sending…' : 'Send'}</button>
         </div>

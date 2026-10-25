@@ -1,5 +1,5 @@
 import type { Account, TonePreset } from '../domain/types'
-import { formatDate } from '../lib/format'
+import { formatDate, initials } from '../lib/format'
 
 export type View = 'inbox' | 'board' | 'dashboard' | 'trash' | 'settings'
 
@@ -88,10 +88,48 @@ function Chevron({ collapsed }: { collapsed: boolean }) {
   )
 }
 
+function ChevronRight() {
+  return (
+    <svg
+      className="nav-chevron"
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <polyline points="9 6 15 12 9 18" />
+    </svg>
+  )
+}
+
+function SendMark() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M22 2 11 13" />
+      <path d="M22 2 15 22 11 13 2 9 22 2z" />
+    </svg>
+  )
+}
+
 const NAV: { id: View; label: string }[] = [
+  { id: 'dashboard', label: 'Dashboard' },
   { id: 'inbox', label: 'Inbox' },
   { id: 'board', label: 'Board' },
-  { id: 'dashboard', label: 'Dashboard' },
   { id: 'trash', label: 'Trash' },
 ]
 
@@ -110,10 +148,22 @@ interface Props {
 export function Sidebar({
   view, onNavigate, account, activity, onOpenThread, busy, onConnect, collapsed, onToggle,
 }: Props) {
+  const identity = account?.email ?? 'Not connected'
+
   return (
     <aside className={collapsed ? 'sidebar collapsed' : 'sidebar'}>
       <div className="sidebar-head">
-        {!collapsed && <div className="sidebar-brand">ColdEmailAgentic</div>}
+        <div className="brand">
+          <span className="brand-mark" aria-hidden="true">
+            <SendMark />
+          </span>
+          {!collapsed && (
+            <span className="brand-text">
+              <span className="brand-name">ColdEmailAgentic</span>
+              <span className="brand-sub">Macos Suite</span>
+            </span>
+          )}
+        </div>
         <button
           type="button"
           className="collapse-btn"
@@ -138,14 +188,14 @@ export function Sidebar({
             onClick={() => onNavigate(item.id)}
           >
             <NavIcon name={item.id} />
-            {!collapsed && item.label}
+            {!collapsed && <span className="nav-label">{item.label}</span>}
           </button>
         ))}
       </nav>
 
       {!collapsed && (
         <div className="activity">
-          <div className="activity-head">Activity</div>
+          <div className="activity-head">Recent activity</div>
           {activity.length === 0 ? (
             <p className="activity-empty">Drafts and sends will show up here.</p>
           ) : (
@@ -169,6 +219,37 @@ export function Sidebar({
         </div>
       )}
 
+      {!collapsed && (
+        <div className="sidebar-foot identity-card">
+          <div className="identity-head">
+            <span className="identity-label">Active Identity</span>
+            <span className={account ? 'status-pill connected' : 'status-pill'}>
+              <span className="status-dot" aria-hidden="true" />
+              {account ? 'Active' : 'Offline'}
+            </span>
+          </div>
+          <div className="identity-row">
+            <span className="avatar avatar-sm" aria-hidden="true">
+              {initials(identity)}
+            </span>
+            <span className="identity-main">
+              <span className="account-email" title={identity}>
+                {identity}
+              </span>
+              <span className="identity-sub">{account ? 'Gmail account' : 'Connect to get started'}</span>
+            </span>
+          </div>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm identity-connect"
+            disabled={busy !== null}
+            onClick={onConnect}
+          >
+            {account ? 'Refresh' : 'Connect'}
+          </button>
+        </div>
+      )}
+
       <div className="sidebar-settings">
         <button
           type="button"
@@ -179,20 +260,14 @@ export function Sidebar({
           onClick={() => onNavigate('settings')}
         >
           <NavIcon name="settings" />
-          {!collapsed && 'Settings'}
+          {!collapsed && (
+            <>
+              <span className="nav-label">Settings</span>
+              <ChevronRight />
+            </>
+          )}
         </button>
       </div>
-
-      {!collapsed && (
-        <div className="sidebar-foot">
-          <span className="account-email" title={account?.email ?? 'Not connected'}>
-            {account?.email ?? 'Not connected'}
-          </span>
-          <button type="button" className="chip ghost" disabled={busy !== null} onClick={onConnect}>
-            {account ? 'Refresh' : 'Connect'}
-          </button>
-        </div>
-      )}
     </aside>
   )
 }

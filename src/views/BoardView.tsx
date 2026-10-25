@@ -31,7 +31,7 @@ function CardItem({ card, thread, onOpenThread }: {
     <article
       ref={setNodeRef}
       style={style}
-      className={isDragging ? 'card dragging' : 'card'}
+      className={isDragging ? `card card-${card.status} dragging` : `card card-${card.status}`}
       {...listeners}
       {...attributes}
     >
@@ -56,7 +56,11 @@ function Column({ status, cards, threadByRowId, onOpenThread }: {
   return (
     <section ref={setNodeRef} className={isOver ? 'board-col over' : 'board-col'}>
       <header className="board-col-head">
-        {COLUMN_LABEL[status]} <span className="count">{cards.length}</span>
+        <span className="board-col-title">
+          <span className={`stage-dot ${status}`} aria-hidden="true" />
+          {COLUMN_LABEL[status]}
+        </span>
+        <span className="count">{cards.length}</span>
       </header>
       <div className="board-col-body">
         {cards.map((card) => (

@@ -60,13 +60,14 @@ export function DraftPanel({
       <div className="composer-body">
         {showPrompt && promptText && <pre className="prompt-preview">{promptText}</pre>}
 
-        <div className="tones">
+        <div className="tones" role="group" aria-label="Tone">
           {TONE_PRESETS.map((t) => (
             <button
               key={t}
               type="button"
               className={t === tone ? 'tone active' : 'tone'}
               disabled={generating}
+              aria-pressed={t === tone}
               onClick={() => onToneChange(t)}
             >
               {t}
@@ -79,6 +80,7 @@ export function DraftPanel({
           value={draft}
           onChange={(e) => onDraftChange(e.target.value)}
           placeholder="Click Generate to draft a reply…"
+          aria-label="Draft reply"
           rows={7}
         />
 
