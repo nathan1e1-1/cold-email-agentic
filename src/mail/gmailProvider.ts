@@ -109,10 +109,11 @@ export class GmailProvider implements MailProvider {
     sinceDays: number; cap: number; query?: string; pageToken?: string; inInbox?: boolean;
     inTrash?: boolean;
   }): Promise<ListThreadsResult> {
+    const junk = ['-category:promotions', '-category:social', '-category:updates', '-category:forums'];
     const base = opts.inTrash
-      ? [`in:trash newer_than:${opts.sinceDays}d`]
+      ? [`in:trash newer_than:${opts.sinceDays}d`, ...junk]
       : opts.inInbox === false
-        ? [`newer_than:${opts.sinceDays}d`, '-in:spam', '-in:trash']
+        ? [`newer_than:${opts.sinceDays}d`, '-in:spam', '-in:trash', ...junk]
         : [`in:inbox newer_than:${opts.sinceDays}d`];
     const q = encodeURIComponent([base.join(' '), opts.query].filter(Boolean).join(' '));
     const page = opts.pageToken ? `&pageToken=${encodeURIComponent(opts.pageToken)}` : '';

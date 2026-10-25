@@ -7,6 +7,7 @@ import {
   buildOutreachQuery, chunkRecipientQueries,
   OUTREACH_CAP, OUTREACH_QUERY_BUDGET, OUTREACH_WINDOW_DAYS,
 } from '../mail/outreach';
+import { isJunkThread } from '../mail/junk';
 
 export type MailProviderFactory = (ownEmail: string) => MailProvider;
 
@@ -67,12 +68,15 @@ export class GmailMailboxAdapter implements MailboxProvider {
       const args = {
         sinceDays: OUTREACH_WINDOW_DAYS, cap: OUTREACH_CAP, query, inInbox: false, inTrash,
       };
+      const clean = (list: Thread[]) => list.filter((t) => !isJunkThread(t));
       let page = await provider.listThreads({ ...args, pageToken: opts?.pageToken });
-      // A page can be empty while a token exists; skip up to 3 dead pages.
-      for (let attempt = 0; page.threads.length === 0 && page.nextPageToken && attempt < 3; attempt++) {
+      let threads = clean(page.threads);
+      // A page can be empty (or all junk) while a token exists; skip up to 3 dead pages.
+      for (let attempt = 0; threads.length === 0 && page.nextPageToken && attempt < 3; attempt++) {
         page = await provider.listThreads({ ...args, pageToken: page.nextPageToken });
+        threads = clean(page.threads);
       }
-      return { threads: page.threads, nextPageToken: page.nextPageToken ?? null };
+      return { threads, nextPageToken: page.nextPageToken ?? null };
     }
 
     const queries = chunkRecipientQueries(recipients);
@@ -85,7 +89,7 @@ export class GmailMailboxAdapter implements MailboxProvider {
         sinceDays: OUTREACH_WINDOW_DAYS, cap: perChunk, query: chunk, inInbox: false, inTrash,
       });
       for (const thread of threads) {
-        if (seen.has(thread.id)) continue;
+        if (isJunkThread(thread) || seen.has(thread.id)) continue;
         seen.add(thread.id);
         merged.push(thread);
       }

@@ -102,13 +102,17 @@ describe('GmailProvider', () => {
     expect(q).toContain('newer_than:30d');
     expect(q).toContain('-in:spam');
     expect(q).toContain('-in:trash');
+    expect(q).toContain('-category:promotions');
+    expect(q).toContain('-category:updates');
     expect(q).not.toContain('in:inbox');
   });
 
   it('keeps in:inbox by default', async () => {
     const http = router();
     await provider(http).listThreads({ sinceDays: 90, cap: 20 });
-    expect(new URL(http.requests[0].url).searchParams.get('q')).toContain('in:inbox');
+    const q = new URL(http.requests[0].url).searchParams.get('q') ?? '';
+    expect(q).toContain('in:inbox');
+    expect(q).not.toContain('-category:');
   });
 
   it('builds an in:trash query when inTrash is set', async () => {

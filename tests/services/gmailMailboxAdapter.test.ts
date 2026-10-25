@@ -189,6 +189,17 @@ describe('GmailMailboxAdapter', () => {
     expect(seen[0]).toMatchObject({ inTrash: true, inInbox: false, sinceDays: 30, cap: 20 });
   });
 
+  it('filters junk threads from outreach results', async () => {
+    const junk = { ...thread, id: 'junk', labels: ['INBOX', 'CATEGORY_PROMOTIONS'] };
+    const { provider } = fakeProvider({
+      listThreads: async () => ({ threads: [thread, junk], seededHistoryId: '1', nextPageToken: null }),
+    });
+    const adapter = new GmailMailboxAdapter(() => provider);
+    await adapter.connect();
+    const page = await adapter.listThreads({ outreachRecipients: ['sarah@acme.com'] });
+    expect(page.threads.map((t) => t.id)).toEqual(['t1']);
+  });
+
   it('trashes and untrashes threads through the provider', async () => {
     const calls: string[] = [];
     const { provider } = fakeProvider({
