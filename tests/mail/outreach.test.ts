@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  normalizeEmail, isOutreachThread, recentRecipientEmails,
+  normalizeEmail, isOutreachThread, recentRecipientEmails, excludeOwnEmail,
   buildOutreachQuery, chunkRecipientQueries,
   OUTREACH_QUERY_BUDGET,
 } from '../../src/mail/outreach';
@@ -85,5 +85,15 @@ describe('chunkRecipientQueries', () => {
     );
     expect(extracted).toEqual(['a@z.com']);
     for (const q of queries) expect(q.length).toBeLessThanOrEqual(OUTREACH_QUERY_BUDGET);
+  });
+});
+
+describe('excludeOwnEmail', () => {
+  it('removes the account address case-insensitively', () => {
+    expect(excludeOwnEmail(['a@z.com', 'ME@X.COM'], 'me@x.com')).toEqual(['a@z.com']);
+  });
+  it('leaves the list alone when the own address is missing', () => {
+    expect(excludeOwnEmail(['a@z.com'], null)).toEqual(['a@z.com']);
+    expect(excludeOwnEmail(['a@z.com'], '')).toEqual(['a@z.com']);
   });
 });

@@ -4,7 +4,7 @@ import type { Account, Thread, TonePreset } from './domain/types'
 import type { AiProvider } from './ai/aiProvider'
 import { buildSystemPrompt, buildUserPrompt } from './ai/prompt'
 import type { MailboxProvider, ThreadPage } from './services/mailbox'
-import { isOutreachThread, recentRecipientEmails } from './mail/outreach'
+import { excludeOwnEmail, isOutreachThread, recentRecipientEmails } from './mail/outreach'
 import { createAiProvider, createMailboxProvider } from './services/providerFactory'
 import { Sidebar, type ActivityItem, type View } from './components/Sidebar'
 import { DashboardView } from './views/DashboardView'
@@ -140,19 +140,49 @@ function App() {
   }, [])
 
   const fetchInbox = useCallback(async (
-    box: MailboxProvider, r: Repository | null, pageToken?: string,
+    box: MailboxProvider, r: Repository | null, pageToken?: string, includeSelf = testMode,
   ): Promise<ThreadPage> => {
     if (!r) return { threads: [], nextPageToken: null }
     // Windowed set — used ONLY to build the Gmail query.
-    const recipients = recentRecipientEmails(await r.listColdRecipients(), Date.now())
+    let recipients = recentRecipientEmails(await r.listColdRecipients(), Date.now())
+    if (!includeSelf) {
+      const acc = await r.getAccount()
+      recipients = excludeOwnEmail(recipients, acc?.ownEmail)
+    }
     return box.listThreads({ pageToken, outreachRecipients: recipients })
-  }, [])
+  }, [testMode])
 
-  const fetchTrash = useCallback(async (pageToken?: string): Promise<ThreadPage | null> => {
+  const fetchTrash = useCallback(async (pageToken?: string, includeSelf = testMode): Promise<ThreadPage | null> => {
     if (!mailbox || !repo) return null
-    const recipients = recentRecipientEmails(await repo.listColdRecipients(), Date.now())
+    let recipients = recentRecipientEmails(await repo.listColdRecipients(), Date.now())
+    if (!includeSelf) {
+      const acc = await repo.getAccount()
+      recipients = excludeOwnEmail(recipients, acc?.ownEmail)
+    }
     return mailbox.listThreads({ pageToken, outreachRecipients: recipients, trashed: true })
-  }, [mailbox, repo])
+  }, [mailbox, repo, testMode])
+
+  const reloadInbox = useCallback(async (includeSelf: boolean) => {
+    if (!mailbox || !repo) return
+    setBusy('Loading threads…')
+    setError(null)
+    try {
+      const page = await fetchInbox(mailbox, repo, undefined, includeSelf)
+      setThreads(page.threads)
+      setNextPageToken(page.nextPageToken)
+      setInboxOverflowed(page.overflowed ?? false)
+      setSelected(null); setSelectedId(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusy(null)
+    }
+  }, [mailbox, repo, fetchInbox])
+
+  const onTestModeChange = useCallback((next: boolean) => {
+    setTestMode(next)
+    void reloadInbox(next)
+  }, [reloadInbox])
 
   const openThreadById = useCallback((threadId: string) => {
     setComposing(false)
@@ -438,7 +468,7 @@ function App() {
               {account ? 'Synced' : 'Not connected'}
             </span>
             <label className="toggle switch">
-              <input type="checkbox" checked={testMode} onChange={(e) => setTestMode(e.target.checked)} />
+              <input type="checkbox" checked={testMode} onChange={(e) => onTestModeChange(e.target.checked)} />
               <span className="switch-track" aria-hidden="true">
                 <span className="switch-thumb" />
               </span>

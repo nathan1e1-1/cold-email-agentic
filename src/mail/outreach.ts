@@ -25,6 +25,13 @@ export function recentRecipientEmails(
   return recipients.filter((r) => r.lastSentAt >= cutoff).map((r) => r.email);
 }
 
+/** Drops the account's own address (self-sends are only shown in test mode). */
+export function excludeOwnEmail(emails: string[], ownEmail: string | null | undefined): string[] {
+  const own = ownEmail?.trim().toLowerCase();
+  if (!own) return emails;
+  return emails.filter((email) => normalizeEmail(email) !== own);
+}
+
 function uniqueRecipients(emails: string[]): string[] {
   const seen = new Set<string>();
   const out: string[] = [];

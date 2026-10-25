@@ -28,10 +28,11 @@ contact/address management, and no compliance footer in the email body.
    activity entry, and closes on success. Test mode disables Send.
 5. **Settings:** remove the mailing-address and unsubscribe fields and their
    setting keys. Keep Gmail, AI, signature, and rate-limit keys.
-6. **Recipients:** `sends(kind='cold')`, **including your own address** so
-   single-account testing works. Only an inbound message from a recipient
-   matches, so outbound self-notes still do not qualify. The composer writes the
-   send row so the inbox filter keeps working.
+6. **Recipients:** `sends(kind='cold')`. **Your own address is included only
+   while Test mode is on**, so single-account testing works; with Test mode off,
+   self-sent threads are excluded from the Inbox and Trash. Only an inbound
+   message from a recipient matches, so outbound self-notes still do not
+   qualify. The composer writes the send row so the inbox filter keeps working.
 7. **Delete `src/views/OutreachView.tsx`.**
 
 ## Non-goals
