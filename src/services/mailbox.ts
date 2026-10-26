@@ -17,6 +17,8 @@ export interface ThreadQueryOptions {
   pageToken?: string;
   /** Present → outreach mode. Empty array means "no cold recipients yet". */
   outreachRecipients?: string[];
+  /** Thread IDs we started (sends.thread_id); matched directly so alias/older replies are visible. */
+  knownThreadIds?: string[];
   trashed?: boolean;
 }
 

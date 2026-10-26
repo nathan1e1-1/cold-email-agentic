@@ -18,6 +18,17 @@ export function isOutreachThread(thread: Thread, recipients: ReadonlySet<string>
   );
 }
 
+/** Known threads we started also count when they contain an inbound reply (e.g. alias reply). */
+export function isRelevantThread(
+  thread: Thread,
+  recipients: ReadonlySet<string>,
+  knownThreadIds: ReadonlySet<string>,
+): boolean {
+  if (isOutreachThread(thread, recipients)) return true;
+  if (!knownThreadIds.has(thread.id)) return false;
+  return thread.messages.some((m) => m.direction === 'inbound');
+}
+
 export function recentRecipientEmails(
   recipients: ColdRecipient[], now: number, days = OUTREACH_WINDOW_DAYS,
 ): string[] {

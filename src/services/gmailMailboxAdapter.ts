@@ -11,6 +11,22 @@ import { isJunkThread } from '../mail/junk';
 
 export type MailProviderFactory = (ownEmail: string) => MailProvider;
 
+async function mergeKnown(
+  current: Thread[],
+  provider: MailProvider,
+  known: string[],
+): Promise<Thread[]> {
+  if (known.length === 0) return current;
+  const extra = await provider.getThreadsByIds(known);
+  const keep = extra.filter(
+    (t) => !isJunkThread(t) && t.messages.some((m) => m.direction === 'inbound'),
+  );
+  const byId = new Map([...current, ...keep].map((t) => [t.id, t]));
+  return [...byId.values()]
+    .sort((a, b) => b.lastMessageAt - a.lastMessageAt)
+    .slice(0, OUTREACH_CAP);
+}
+
 export class GmailMailboxAdapter implements MailboxProvider {
   private createProvider: MailProviderFactory;
   private provider: MailProvider | null = null;
@@ -63,6 +79,7 @@ export class GmailMailboxAdapter implements MailboxProvider {
     if (!query) return { threads: [], nextPageToken: null };
 
     const inTrash = opts?.trashed ?? false;
+    const known = inTrash ? [] : (opts?.knownThreadIds ?? []);
 
     if (query.length <= OUTREACH_QUERY_BUDGET) {
       const args = {
@@ -76,7 +93,8 @@ export class GmailMailboxAdapter implements MailboxProvider {
         page = await provider.listThreads({ ...args, pageToken: page.nextPageToken });
         threads = clean(page.threads);
       }
-      return { threads, nextPageToken: page.nextPageToken ?? null };
+      const merged = await mergeKnown(threads, provider, known);
+      return { threads: merged, nextPageToken: page.nextPageToken ?? null };
     }
 
     const queries = chunkRecipientQueries(recipients);
@@ -95,7 +113,8 @@ export class GmailMailboxAdapter implements MailboxProvider {
       }
     }
     merged.sort((a, b) => b.lastMessageAt - a.lastMessageAt);
-    return { threads: merged.slice(0, OUTREACH_CAP), nextPageToken: null, overflowed: true };
+    const finalThreads = await mergeKnown(merged.slice(0, OUTREACH_CAP), provider, known);
+    return { threads: finalThreads, nextPageToken: null, overflowed: true };
   }
 
   async getThread(id: string): Promise<Thread | null> {

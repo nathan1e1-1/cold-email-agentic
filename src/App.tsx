@@ -4,7 +4,7 @@ import type { Account, Thread, TonePreset } from './domain/types'
 import type { AiProvider } from './ai/aiProvider'
 import { buildSystemPrompt, buildUserPrompt } from './ai/prompt'
 import type { MailboxProvider, ThreadPage } from './services/mailbox'
-import { excludeOwnEmail, isOutreachThread, recentRecipientEmails } from './mail/outreach'
+import { excludeOwnEmail, isRelevantThread, recentRecipientEmails } from './mail/outreach'
 import { AUTO_REFRESH_TICK_MS, shouldAutoRefresh } from './mail/autoRefresh'
 import { createAiProvider, createMailboxProvider } from './services/providerFactory'
 import { Sidebar, type ActivityItem, type View } from './components/Sidebar'
@@ -49,8 +49,9 @@ async function persistThreads(r: Repository, acc: Account, list: Thread[]): Prom
   })
   // Full, unwindowed set: older leads must keep their cards.
   const recipients = new Set((await r.listColdRecipients()).map((c) => c.email))
+  const known = new Set(await r.listColdThreadIds())
   for (const thread of list) {
-    if (!isOutreachThread(thread, recipients)) continue
+    if (!isRelevantThread(thread, recipients, known)) continue
     const saved = await r.upsertThread({ ...thread, accountId: accountRow.rowId })
     for (const message of thread.messages) await r.upsertMessage(saved.rowId, message)
     await ensureCardForThread(r, saved.rowId)
@@ -157,7 +158,8 @@ function App() {
       const acc = await r.getAccount()
       recipients = excludeOwnEmail(recipients, acc?.ownEmail)
     }
-    return box.listThreads({ pageToken, outreachRecipients: recipients })
+    const known = await r.listColdThreadIds()
+    return box.listThreads({ pageToken, outreachRecipients: recipients, knownThreadIds: known })
   }, [testMode])
 
   const fetchTrash = useCallback(async (pageToken?: string, includeSelf = testMode): Promise<ThreadPage | null> => {

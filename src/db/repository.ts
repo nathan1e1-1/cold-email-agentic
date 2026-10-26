@@ -45,6 +45,8 @@ export interface Repository {
   recordSend(sentAt: number, kind: SendKind, toEmail: string, threadId?: string): Promise<void>;
   /** Distinct cold recipients (lowercased), newest cold send first, excluding the account's own address. */
   listColdRecipients(): Promise<ColdRecipient[]>;
+  /** Thread IDs we started (sends.thread_id), for direct lookup regardless of sender or age. */
+  listColdThreadIds(): Promise<string[]>;
   countSendsSince(sinceTs: number, kind: SendKind): Promise<number>;
   hasColdSendTo(email: string): Promise<boolean>;
 

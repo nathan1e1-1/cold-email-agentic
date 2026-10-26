@@ -281,4 +281,79 @@ describe('GmailMailboxAdapter', () => {
     expect(page.threads).toEqual([]);
     expect(page.nextPageToken).toBe('p5');
   });
+
+  it('merges known cold threads whose replies come from an alias', async () => {
+    const alias: Thread = {
+      ...thread,
+      id: 't9',
+      participants: [{ email: 'alias@acme.com' }, { email: 'me@x.com' }],
+      messages: [{ ...thread.messages[0], id: 'm9', from: { email: 'alias@acme.com' } }],
+    };
+    const calls: string[][] = [];
+    const { provider } = fakeProvider({
+      getThreadsByIds: async (ids) => { calls.push(ids); return [alias]; },
+    });
+    const adapter = new GmailMailboxAdapter(() => provider);
+    await adapter.connect();
+    const page = await adapter.listThreads({
+      outreachRecipients: ['sarah@acme.com'],
+      knownThreadIds: ['t9'],
+    });
+    expect(page.threads.map((t) => t.id).sort()).toEqual(['t1', 't9']);
+    expect(calls).toEqual([['t9']]);
+  });
+
+  it('excludes known threads that only have outbound messages', async () => {
+    const outboundOnly: Thread = {
+      ...thread,
+      id: 't10',
+      messages: [{ ...thread.messages[0], id: 'm10', direction: 'outbound' }],
+    };
+    const { provider } = fakeProvider({ getThreadsByIds: async () => [outboundOnly] });
+    const adapter = new GmailMailboxAdapter(() => provider);
+    await adapter.connect();
+    const page = await adapter.listThreads({
+      outreachRecipients: ['sarah@acme.com'],
+      knownThreadIds: ['t10'],
+    });
+    expect(page.threads.map((t) => t.id)).toEqual(['t1']);
+  });
+
+  it('excludes known junk threads', async () => {
+    const junk: Thread = { ...thread, id: 't11', labels: ['INBOX', 'CATEGORY_PROMOTIONS'] };
+    const { provider } = fakeProvider({ getThreadsByIds: async () => [junk] });
+    const adapter = new GmailMailboxAdapter(() => provider);
+    await adapter.connect();
+    const page = await adapter.listThreads({
+      outreachRecipients: ['sarah@acme.com'],
+      knownThreadIds: ['t11'],
+    });
+    expect(page.threads.map((t) => t.id)).toEqual(['t1']);
+  });
+
+  it('dedupes a known thread that also matched the from-query', async () => {
+    const { provider } = fakeProvider({ getThreadsByIds: async () => [thread] });
+    const adapter = new GmailMailboxAdapter(() => provider);
+    await adapter.connect();
+    const page = await adapter.listThreads({
+      outreachRecipients: ['sarah@acme.com'],
+      knownThreadIds: ['t1'],
+    });
+    expect(page.threads.map((t) => t.id)).toEqual(['t1']);
+  });
+
+  it('does not merge known threads in trash', async () => {
+    let calls = 0;
+    const { provider } = fakeProvider({
+      getThreadsByIds: async () => { calls++; return [thread]; },
+    });
+    const adapter = new GmailMailboxAdapter(() => provider);
+    await adapter.connect();
+    await adapter.listThreads({
+      outreachRecipients: ['sarah@acme.com'],
+      knownThreadIds: ['t9'],
+      trashed: true,
+    });
+    expect(calls).toBe(0);
+  });
 });

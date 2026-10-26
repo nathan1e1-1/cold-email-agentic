@@ -3,6 +3,7 @@ import {
   normalizeEmail, isOutreachThread, recentRecipientEmails, excludeOwnEmail,
   buildOutreachQuery, chunkRecipientQueries,
   OUTREACH_QUERY_BUDGET,
+  isRelevantThread,
 } from '../../src/mail/outreach';
 import type { Thread } from '../../src/domain/types';
 
@@ -35,6 +36,15 @@ describe('isOutreachThread', () => {
   });
   it('rejects an unrelated sender', () => {
     expect(isOutreachThread(thread('stranger@z.com'), recipients)).toBe(false);
+  });
+});
+
+describe('isRelevantThread', () => {
+  it('keeps a known thread with an inbound reply, but not outbound-only', () => {
+    const known = new Set(['t1']);
+    expect(isRelevantThread(thread('alias@x.com'), new Set(), known)).toBe(true);
+    expect(isRelevantThread(thread('alias@x.com', 'outbound'), new Set(), known)).toBe(false);
+    expect(isRelevantThread(thread('alias@x.com'), new Set(), new Set())).toBe(false);
   });
 });
 

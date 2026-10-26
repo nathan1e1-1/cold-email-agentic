@@ -1,6 +1,6 @@
 import type { Card } from '../domain/types';
 import type { RepoThread, Repository } from '../db/repository';
-import { isOutreachThread } from '../mail/outreach';
+import { isRelevantThread } from '../mail/outreach';
 
 export interface BoardData {
   threads: RepoThread[];
@@ -9,12 +9,14 @@ export interface BoardData {
 
 export async function loadBoard(repo: Repository): Promise<BoardData> {
   // Full, unwindowed set: older leads must keep their cards.
-  const [threads, cards, recipients] = await Promise.all([
+  const [threads, cards, recipients, coldThreadIds] = await Promise.all([
     repo.listThreads(),
     repo.listCards(),
     repo.listColdRecipients(),
+    repo.listColdThreadIds(),
   ]);
   const set = new Set(recipients.map((r) => r.email));
+  const known = new Set(coldThreadIds);
   // listThreads() omits messages; hydrate them for the inbound predicate.
   const hydrated = await Promise.all(
     threads.map(async (thread) => ({
@@ -22,7 +24,7 @@ export async function loadBoard(repo: Repository): Promise<BoardData> {
       messages: await repo.listMessages(thread.rowId),
     })),
   );
-  const visible = hydrated.filter((thread) => isOutreachThread(thread, set));
+  const visible = hydrated.filter((thread) => isRelevantThread(thread, set, known));
   const visibleIds = new Set(visible.map((t) => t.rowId));
   return {
     threads: visible,

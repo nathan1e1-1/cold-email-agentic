@@ -283,6 +283,15 @@ describe('NodeRepository', () => {
     expect(rows[1].thread_id).toBeNull();
   });
 
+  it('lists distinct cold thread ids', async () => {
+    const repo = new NodeRepository(':memory:');
+    await repo.recordSend(1, 'cold', 'a@x.com', 't1');
+    await repo.recordSend(2, 'cold', 'a@x.com', 't1');
+    await repo.recordSend(3, 'cold', 'b@x.com', 't2');
+    await repo.recordSend(4, 'reply', 'c@x.com', 't3');
+    expect((await repo.listColdThreadIds()).sort()).toEqual(['t1', 't2']);
+  });
+
   it('stores settings', async () => {
     const repo = mk();
     await repo.setSetting('rate_limit_per_day', '25');

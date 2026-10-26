@@ -237,8 +237,13 @@ export class NodeRepository implements Repository {
     return rows.map((r) => ({ email: normEmail(r.email), lastSentAt: Number(r.last_sent_at) }));
   }
 
-  async countSendsSince(sinceTs: number, kind: SendKind): Promise<number> {
-    const row = this.one<{ n: number }>(
+  async listColdThreadIds(): Promise<string[]> {
+    return this.all<{ thread_id: string }>(
+      "SELECT DISTINCT thread_id FROM sends WHERE kind='cold' AND thread_id IS NOT NULL",
+    ).map((r) => r.thread_id);
+  }
+
+  async countSendsSince(sinceTs: number, kind: SendKind): Promise<number> {    const row = this.one<{ n: number }>(
       'SELECT COUNT(*) AS n FROM sends WHERE kind=? AND sent_at>=?', kind, sinceTs)!;
     return Number(row.n);
   }
