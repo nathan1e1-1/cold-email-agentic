@@ -3,14 +3,12 @@ import type { Account, Card, CardStatus, ColdRecipient, Contact, Draft, Message,
 export interface RepoAccount extends Account {
   rowId: number;
   tokenRef: string;
-  historyId: string | null;
   createdAt: number;
 }
 
 export interface RepoThread extends Thread {
   rowId: number;
   accountId: number;
-  historyId: string | null;
 }
 
 export interface Repository {
@@ -18,7 +16,6 @@ export interface Repository {
 
   upsertAccount(a: Account & { tokenRef: string; createdAt: number }): Promise<RepoAccount>;
   getAccount(): Promise<RepoAccount | null>;
-  setHistoryId(accountId: number, historyId: string): Promise<void>;
 
   upsertThread(t: Thread & { accountId: number }): Promise<RepoThread>;
   getThreadByProviderId(providerThreadId: string): Promise<RepoThread | null>;

@@ -57,17 +57,15 @@ describe('NodeRepository', () => {
       messages: [], lastMessageAt, snippet: '', inInbox: true });
   }
 
-  it('persists an account, updates it in place, and scopes history id', async () => {
+  it('persists an account and updates it in place', async () => {
     const repo = mk();
     const a1 = await repo.upsertAccount({ provider: 'gmail', email: 'me@x.com', ownEmail: 'me@x.com',
       tokenRef: 'gmail/token', createdAt: 1 });
-    await repo.setHistoryId(a1.rowId, 'h123');
     const a2 = await repo.upsertAccount({ provider: 'gmail', email: 'me@x.com', ownEmail: 'me@x.com',
       displayName: 'Me', tokenRef: 'gmail/token2', createdAt: 1 });
     expect(a2.rowId).toBe(a1.rowId);
     const acc = await repo.getAccount();
     expect(acc?.email).toBe('me@x.com');
-    expect(acc?.historyId).toBe('h123');
     expect(acc?.displayName).toBe('Me');
     expect(acc?.tokenRef).toBe('gmail/token2');
   });
@@ -290,14 +288,5 @@ describe('NodeRepository', () => {
     await repo.setSetting('rate_limit_per_day', '25');
     expect(await repo.getSetting('rate_limit_per_day')).toBe('25');
     expect(await repo.getSetting('missing')).toBeNull();
-  });
-
-  it('stores a per-thread historyId', async () => {
-    const repo = mk();
-    const acc = await seedAccount(repo);
-    const t = { id: 'thr1', accountId: acc.rowId, subject: '', participants: [], labels: [],
-      messages: [], lastMessageAt: 1, snippet: '', inInbox: true, historyId: '500' };
-    expect((await repo.upsertThread(t)).historyId).toBe('500');
-    expect((await repo.upsertThread({ ...t, historyId: '600' })).historyId).toBe('600');
   });
 });

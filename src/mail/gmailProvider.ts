@@ -2,7 +2,7 @@ import type { Thread } from '../domain/types';
 import type { Authenticator } from './oauth';
 import type { HttpClient } from './httpClient';
 import type {
-  DraftInput, GmailProfile, HistoryDelta, ListThreadsResult, MailProvider,
+  DraftInput, GmailProfile, ListThreadsResult, MailProvider,
 } from './mailProvider';
 import { parseThread, type GmailThreadResource } from './gmailParse';
 import { buildMime } from './mime';
@@ -101,8 +101,8 @@ export class GmailProvider implements MailProvider {
   async getProfile(): Promise<GmailProfile> {
     const res = await this.request('GET', '/profile');
     ensureOk(res, 'Gmail getProfile');
-    const json = JSON.parse(res.body) as { emailAddress?: string; historyId?: string };
-    return { emailAddress: json.emailAddress ?? '', historyId: json.historyId ?? '0' };
+    const json = JSON.parse(res.body) as { emailAddress?: string };
+    return { emailAddress: json.emailAddress ?? '' };
   }
 
   async listThreads(opts: {
@@ -125,8 +125,7 @@ export class GmailProvider implements MailProvider {
       sleep: this.sleep,
       minIntervalMs: this.throttleMs,
     });
-    const profile = await this.getProfile();
-    return { threads, seededHistoryId: profile.historyId, nextPageToken: json.nextPageToken ?? null };
+    return { threads, nextPageToken: json.nextPageToken ?? null };
   }
 
   async getThread(id: string): Promise<Thread> {
@@ -140,36 +139,6 @@ export class GmailProvider implements MailProvider {
       sleep: this.sleep,
       minIntervalMs: this.throttleMs,
     });
-  }
-
-  async listHistoryChanges(opts: { historyId: string }): Promise<HistoryDelta> {
-    const res = await this.request(
-      'GET',
-      `/history?startHistoryId=${opts.historyId}&historyTypes=messageAdded,messageDeleted,labelAdded,labelRemoved`,
-    );
-    if (res.status === 404) {
-      return { changedThreadIds: [], deletedThreadIds: [], nextHistoryId: opts.historyId, expired: true };
-    }
-    ensureOk(res, 'Gmail history');
-    const json = JSON.parse(res.body) as {
-      historyId?: string;
-      history?: {
-        messagesAdded?: { message: { threadId: string } }[];
-        messagesDeleted?: { message: { threadId: string } }[];
-      }[];
-    };
-    const changed = new Set<string>();
-    const deleted = new Set<string>();
-    for (const record of json.history ?? []) {
-      for (const m of record.messagesAdded ?? []) changed.add(m.message.threadId);
-      for (const m of record.messagesDeleted ?? []) deleted.add(m.message.threadId);
-    }
-    return {
-      changedThreadIds: [...changed],
-      deletedThreadIds: [...deleted],
-      nextHistoryId: json.historyId ?? opts.historyId,
-      expired: false,
-    };
   }
 
   async send(input: DraftInput): Promise<{ messageId: string; threadId: string }> {

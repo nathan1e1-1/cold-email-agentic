@@ -19,12 +19,10 @@ export interface GmailMessageResource {
   labelIds?: string[];
   snippet?: string;
   internalDate?: string;
-  historyId?: string;
   payload?: GmailPayload;
 }
 export interface GmailThreadResource {
   id: string;
-  historyId?: string;
   snippet?: string;
   messages?: GmailMessageResource[];
 }
@@ -168,6 +166,5 @@ export function parseThread(res: GmailThreadResource, ownEmail: string): Thread 
     snippet: res.snippet ?? '',
     inInbox: labels.includes('INBOX'),
     labels,
-    historyId: res.historyId,
   };
 }

@@ -36,13 +36,10 @@ function fakeProvider(overrides: Partial<MailProvider> = {}): { provider: MailPr
   const provider: MailProvider = {
     auth: async () => {},
     isAuthed: async () => true,
-    getProfile: async () => ({ emailAddress: 'me@x.com', historyId: '1' }),
-    listThreads: async () => ({ threads: [thread], seededHistoryId: '1', nextPageToken: null }),
+    getProfile: async () => ({ emailAddress: 'me@x.com' }),
+    listThreads: async () => ({ threads: [thread], nextPageToken: null }),
     getThread: async () => thread,
     getThreadsByIds: async () => [thread],
-    listHistoryChanges: async () => ({
-      changedThreadIds: [], deletedThreadIds: [], nextHistoryId: '1', expired: false,
-    }),
     send: async (input) => {
       sent.push(input);
       return { messageId: 'sent1', threadId: input.threadId ?? 't1' };
@@ -135,7 +132,7 @@ describe('GmailMailboxAdapter', () => {
   it('outreach mode with no recipients makes no provider call', async () => {
     let calls = 0;
     const { provider } = fakeProvider({
-      listThreads: async () => { calls++; return { threads: [thread], seededHistoryId: '1', nextPageToken: null }; },
+      listThreads: async () => { calls++; return { threads: [thread], nextPageToken: null }; },
     });
     const adapter = new GmailMailboxAdapter(() => provider);
     await adapter.connect();
@@ -147,7 +144,7 @@ describe('GmailMailboxAdapter', () => {
   it('outreach mode passes the from-query, 30-day window, cap, page token, and inInbox=false', async () => {
     const seen: unknown[] = [];
     const { provider } = fakeProvider({
-      listThreads: async (opts) => { seen.push(opts); return { threads: [thread], seededHistoryId: '1', nextPageToken: 'next' }; },
+      listThreads: async (opts) => { seen.push(opts); return { threads: [thread], nextPageToken: 'next' }; },
     });
     const adapter = new GmailMailboxAdapter(() => provider);
     await adapter.connect();
@@ -166,7 +163,7 @@ describe('GmailMailboxAdapter', () => {
     const { provider } = fakeProvider({
       listThreads: async (opts) => {
         seen.push(opts);
-        return { threads: [thread], seededHistoryId: '1', nextPageToken: null };
+        return { threads: [thread], nextPageToken: null };
       },
     });
     const adapter = new GmailMailboxAdapter(() => provider);
@@ -180,7 +177,7 @@ describe('GmailMailboxAdapter', () => {
     const { provider } = fakeProvider({
       listThreads: async (opts) => {
         seen.push(opts);
-        return { threads: [thread], seededHistoryId: '1', nextPageToken: null };
+        return { threads: [thread], nextPageToken: null };
       },
     });
     const adapter = new GmailMailboxAdapter(() => provider);
@@ -192,7 +189,7 @@ describe('GmailMailboxAdapter', () => {
   it('filters junk threads from outreach results', async () => {
     const junk = { ...thread, id: 'junk', labels: ['INBOX', 'CATEGORY_PROMOTIONS'] };
     const { provider } = fakeProvider({
-      listThreads: async () => ({ threads: [thread, junk], seededHistoryId: '1', nextPageToken: null }),
+      listThreads: async () => ({ threads: [thread, junk], nextPageToken: null }),
     });
     const adapter = new GmailMailboxAdapter(() => provider);
     await adapter.connect();
@@ -219,9 +216,9 @@ describe('GmailMailboxAdapter', () => {
       listThreads: async (opts) => {
         seen.push(opts.pageToken ?? 'first');
         if (!opts.pageToken) {
-          return { threads: [], seededHistoryId: '1', nextPageToken: 'p2' };
+          return { threads: [], nextPageToken: 'p2' };
         }
-        return { threads: [thread], seededHistoryId: '1', nextPageToken: 'p3' };
+        return { threads: [thread], nextPageToken: 'p3' };
       },
     });
     const adapter = new GmailMailboxAdapter(() => provider);
@@ -245,7 +242,6 @@ describe('GmailMailboxAdapter', () => {
             id: `t-${c * 8 + i}`,
             lastMessageAt: c * 10 + i,
           })),
-          seededHistoryId: '1',
           nextPageToken: null,
         };
       },
@@ -273,7 +269,6 @@ describe('GmailMailboxAdapter', () => {
         seen.push(opts.pageToken);
         return {
           threads: [],
-          seededHistoryId: '1',
           nextPageToken: `p${seen.length + 1}`,
         };
       },

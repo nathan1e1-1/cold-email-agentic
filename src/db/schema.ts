@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS accounts (
   own_email TEXT NOT NULL,
   display_name TEXT,
   token_ref TEXT NOT NULL,
+  -- retired: history sync removed; column kept for migration compatibility
   history_id TEXT,
   created_at INTEGER NOT NULL
 );
