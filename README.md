@@ -36,8 +36,10 @@ key (or copy `.env.example` → `.env`).
 npm run tauri build
 ```
 
-Produces an unsigned `.app` (and `.dmg`) under `src-tauri/target/release/bundle/`. Because
-it isn't signed/notarized, macOS Gatekeeper will warn on first launch — right-click → Open.
+Produces an unsigned `.app` under `src-tauri/target/release/bundle/` (the configured
+target is `app`; add `dmg` to `bundle.targets` in `src-tauri/tauri.conf.json` if you want
+an installer). Because it isn't signed/notarized, macOS Gatekeeper will warn on first
+launch — right-click → Open.
 
 ## Test
 
