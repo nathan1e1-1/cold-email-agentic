@@ -157,11 +157,14 @@ function App() {
     if (!r) return { threads: [], nextPageToken: null }
     // Windowed set — used ONLY to build the Gmail query.
     let recipients = recentRecipientEmails(await r.listColdRecipients(), Date.now())
-    if (!includeSelf) {
+    let known: string[]
+    if (includeSelf) {
+      known = await r.listColdThreadIds()
+    } else {
       const acc = await r.getAccount()
       recipients = excludeOwnEmail(recipients, acc?.ownEmail)
+      known = await r.listColdThreadIds(acc?.ownEmail)
     }
-    const known = await r.listColdThreadIds()
     return box.listThreads({ pageToken, outreachRecipients: recipients, knownThreadIds: known })
   }, [testMode])
 
@@ -543,7 +546,7 @@ function App() {
 
         <div className="content">
           {view === 'board' && (
-            <BoardView repo={repo} onOpenThread={openThreadById} refreshKey={boardVersion} />
+            <BoardView repo={repo} onOpenThread={openThreadById} refreshKey={boardVersion} testMode={testMode} />
           )}
 
           {view === 'dashboard' && (

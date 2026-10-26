@@ -7,15 +7,18 @@ export interface BoardData {
   cards: Card[];
 }
 
-export async function loadBoard(repo: Repository): Promise<BoardData> {
+export async function loadBoard(repo: Repository, includeSelf = true): Promise<BoardData> {
+  const account = includeSelf ? null : await repo.getAccount();
+  const exclude = account?.ownEmail;
   // Full, unwindowed set: older leads must keep their cards.
   const [threads, cards, recipients, coldThreadIds] = await Promise.all([
     repo.listThreads(),
     repo.listCards(),
     repo.listColdRecipients(),
-    repo.listColdThreadIds(),
+    repo.listColdThreadIds(exclude),
   ]);
   const set = new Set(recipients.map((r) => r.email));
+  if (exclude) set.delete(exclude.trim().toLowerCase());
   const known = new Set(coldThreadIds);
   // listThreads() omits messages; hydrate them for the inbound predicate.
   const hydrated = await Promise.all(

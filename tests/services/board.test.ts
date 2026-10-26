@@ -74,3 +74,33 @@ describe('loadBoard', () => {
     expect(board.cards.map((c) => c.id)).toEqual([knownCard.id]);
   });
 });
+
+  it('hides self-sent test threads when self is excluded', async () => {
+    const repo = new NodeRepository(':memory:');
+    const account = await repo.upsertAccount({
+      provider: 'gmail', email: 'me@x.com', ownEmail: 'me@x.com', tokenRef: 't', createdAt: 1,
+    });
+    await repo.recordSend(1, 'cold', 'me@x.com', 'thr-self');
+    await repo.recordSend(2, 'cold', 'a@z.com', 'thr-a');
+
+    const self = await repo.upsertThread({
+      id: 'thr-self', accountId: account.rowId, subject: '', participants: [{ email: 'me@x.com' }],
+      labels: [], messages: [], lastMessageAt: 1, snippet: '', inInbox: true,
+    });
+    await repo.upsertMessage(self.rowId, msg('me@x.com', 'inbound'));
+    await repo.createCard(self.rowId, 'untouched', 1);
+
+    const other = await repo.upsertThread({
+      id: 'thr-a', accountId: account.rowId, subject: '', participants: [{ email: 'a@z.com' }],
+      labels: [], messages: [], lastMessageAt: 2, snippet: '', inInbox: true,
+    });
+    await repo.upsertMessage(other.rowId, msg('a@z.com', 'inbound'));
+    const otherCard = await repo.createCard(other.rowId, 'untouched', 2);
+
+    const withSelf = await loadBoard(repo, true);
+    expect(withSelf.threads.map((t) => t.id).sort()).toEqual(['thr-a', 'thr-self']);
+
+    const withoutSelf = await loadBoard(repo, false);
+    expect(withoutSelf.threads.map((t) => t.id)).toEqual(['thr-a']);
+    expect(withoutSelf.cards.map((c) => c.id)).toEqual([otherCard.id]);
+  });

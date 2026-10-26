@@ -219,11 +219,18 @@ export class TauriRepository implements Repository {
     return rows.map((r) => ({ email: normEmail(r.email), lastSentAt: Number(r.last_sent_at) }));
   }
 
-  async listColdThreadIds(): Promise<string[]> {
-    const rows = await this.all<{ thread_id: string }>(
-      SQL.SQL_LIST_COLD_THREAD_IDS,
-    );
-    return rows.map((r) => r.thread_id);
+  async listColdThreadIds(excludeEmail?: string): Promise<string[]> {
+    const rows = await this.all<{ thread_id: string; to_email: string }>(SQL.SQL_LIST_COLD_THREAD_IDS);
+    const own = excludeEmail?.trim().toLowerCase();
+    const seen = new Set<string>();
+    const ids: string[] = [];
+    for (const row of rows) {
+      if (own && row.to_email === own) continue;
+      if (seen.has(row.thread_id)) continue;
+      seen.add(row.thread_id);
+      ids.push(row.thread_id);
+    }
+    return ids;
   }
 
   async countSendsSince(sinceTs: number, kind: SendKind): Promise<number> {

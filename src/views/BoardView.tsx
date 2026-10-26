@@ -83,15 +83,16 @@ interface Props {
   repo: Repository | null
   onOpenThread: (threadId: string) => void
   refreshKey: number
+  testMode: boolean
 }
 
-export function BoardView({ repo, onOpenThread, refreshKey }: Props) {
+export function BoardView({ repo, onOpenThread, refreshKey, testMode }: Props) {
   const [threads, setThreads] = useState<RepoThread[]>([])
   const [cards, setCards] = useState<Card[]>([])
   const [activeId, setActiveId] = useState<number | null>(null)
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
 
-  const load = useCallback(async () => (repo ? loadBoard(repo) : null), [repo])
+  const load = useCallback(async () => (repo ? loadBoard(repo, testMode) : null), [repo, testMode])
 
   const reload = useCallback(async () => {
     const result = await load()
