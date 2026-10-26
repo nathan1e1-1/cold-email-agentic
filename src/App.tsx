@@ -88,6 +88,7 @@ function App() {
   const [testMode, setTestMode] = useState(true)
   const [signature, setSignature] = useState(() => loadSettings().signature)
   const [composing, setComposing] = useState(false)
+  const [replyOpen, setReplyOpen] = useState(false)
   const [inboxOverflowed, setInboxOverflowed] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -147,7 +148,7 @@ function App() {
   )
 
   const openThread = useCallback(async (box: MailboxProvider, id: string) => {
-    setSelectedId(id); setStatus(null); setDraft(''); setInstruction('')
+    setSelectedId(id); setStatus(null); setDraft(''); setInstruction(''); setReplyOpen(false)
     setSelected(await box.getThread(id))
   }, [])
 
@@ -263,6 +264,29 @@ function App() {
     void connect()
   }, [connect])
 
+  const refreshInboxSilently = useCallback(async (
+    includeSelf = testMode, isActive: () => boolean = () => true,
+  ) => {
+    if (!mailbox || !repo || autoBusyRef.current) return
+    autoBusyRef.current = true
+    try {
+      const page = await fetchInbox(mailbox, repo, undefined, includeSelf)
+      if (!isActive()) return
+      setThreads(page.threads)
+      setNextPageToken(page.nextPageToken)
+      setInboxOverflowed(page.overflowed ?? false)
+      const id = selectedIdRef.current
+      if (id) {
+        const refreshed = await mailbox.getThread(id)
+        if (isActive() && refreshed) setSelected(refreshed)
+      }
+    } catch {
+      /* silent: a manual Refresh surfaces the error */
+    } finally {
+      autoBusyRef.current = false
+    }
+  }, [mailbox, repo, fetchInbox, testMode])
+
   // Silent auto-refresh: poll while visible (throttled) and refresh on focus,
   // so replies appear without the user pressing Refresh. Never shows a spinner
   // and never clears the current selection or draft.
@@ -274,24 +298,8 @@ function App() {
       const visibility = typeof document !== 'undefined' ? document.visibilityState : 'visible'
       if (busyRef.current) return
       if (!shouldAutoRefresh(visibility, lastAutoRefreshRef.current, Date.now(), autoBusyRef.current)) return
-      autoBusyRef.current = true
       lastAutoRefreshRef.current = Date.now()
-      try {
-        const page = await fetchInbox(mailbox, repo, undefined, testMode)
-        if (!active) return
-        setThreads(page.threads)
-        setNextPageToken(page.nextPageToken)
-        setInboxOverflowed(page.overflowed ?? false)
-        const id = selectedIdRef.current
-        if (id) {
-          const refreshed = await mailbox.getThread(id)
-          if (active && refreshed) setSelected(refreshed)
-        }
-      } catch {
-        /* silent: a manual Refresh surfaces the error */
-      } finally {
-        autoBusyRef.current = false
-      }
+      await refreshInboxSilently(testMode, () => active)
     }
 
     const interval = window.setInterval(() => void tick(), AUTO_REFRESH_TICK_MS)
@@ -305,7 +313,7 @@ function App() {
       window.removeEventListener('focus', onFocus)
       document.removeEventListener('visibilitychange', onVisibility)
     }
-  }, [mailbox, repo, fetchInbox, testMode])
+  }, [mailbox, repo, refreshInboxSilently, testMode])
 
   useEffect(() => {
     let active = true
@@ -365,6 +373,14 @@ function App() {
       const sent = await mailbox.send(selected.id, draft.trim())
       setStatus(`Sent to ${sent.to.map((a) => a.email).join(', ')}`)
       pushActivity({ kind: 'sent', subject: selected.subject, tone, at: Date.now(), threadId: selected.id })
+      if (selectedIdRef.current !== selected.id) return
+      setDraft('')
+      setInstruction('')
+      setReplyOpen(false)
+      requestAnimationFrame(() => {
+        const toggle = document.getElementById('reply-toggle')
+        if (toggle instanceof HTMLButtonElement) toggle.focus()
+      })
       if (request !== inboxRequestRef.current) return
       const page = await fetchInbox(mailbox, repo)
       if (request !== inboxRequestRef.current) return
@@ -372,12 +388,42 @@ function App() {
       setNextPageToken(page.nextPageToken)
       setInboxOverflowed(page.overflowed ?? false)
       const fresh = await mailbox.getThread(selected.id)
+      if (selectedIdRef.current !== selected.id) return
       if (request !== inboxRequestRef.current) return
       setSelected(fresh)
     } catch (err) {
       if (request === inboxRequestRef.current) setError(err instanceof Error ? err.message : String(err))
     }
   }, [mailbox, selected, draft, tone, pushActivity, repo, fetchInbox])
+
+  const expandReply = useCallback(() => {
+    setReplyOpen(true)
+    requestAnimationFrame(() => {
+      const el = document.getElementById('reply-draft')
+      if (el instanceof HTMLTextAreaElement) {
+        el.focus()
+        el.scrollIntoView?.({ block: 'nearest' })
+      }
+    })
+  }, [])
+
+  const toggleReply = useCallback((open: boolean) => {
+    if (open) expandReply()
+    else setReplyOpen(false)
+  }, [expandReply])
+
+  // Uses the silent refresh so the current thread and draft are preserved.
+  const disableTestMode = useCallback(() => {
+    setTestMode(false)
+    const run = (attempt = 0) => {
+      if (autoBusyRef.current) {
+        if (attempt < 10) window.setTimeout(() => run(attempt + 1), 300)
+        return
+      }
+      void refreshInboxSilently(false)
+    }
+    run()
+  }, [refreshInboxSilently])
 
   const handleGenerate = useCallback(() => {
     if (selected && ai && account) {
@@ -605,7 +651,7 @@ function App() {
                   />
                 ) : selected ? (
                   <>
-                    <ReaderPane thread={selected} onTrash={() => void trashSelected()} trashBusy={trashActionBusy} />
+                    <ReaderPane thread={selected} onTrash={() => void trashSelected()} trashBusy={trashActionBusy} onReply={expandReply} />
                     <DraftPanel
                       ai={ai}
                       generating={generating}
@@ -622,6 +668,9 @@ function App() {
                       promptText={promptText}
                       to={recipient}
                       subject={replySubject}
+                      onDisableTestMode={disableTestMode}
+                      open={replyOpen}
+                      onToggle={toggleReply}
                     />
                   </>
                 ) : (
