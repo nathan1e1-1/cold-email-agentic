@@ -15,6 +15,7 @@ import { TrashView } from './views/TrashView'
 import { BoardView } from './views/BoardView'
 import { ensureCardForThread } from './services/kanban'
 import { loadSettings } from './services/appSettings'
+import { onGlobalError } from './services/errorBus'
 import { getRepository } from './db/repositoryFactory'
 import type { Repository } from './db/repository'
 import { ThreadList } from './components/ThreadList'
@@ -101,6 +102,7 @@ function App() {
 
   useEffect(() => { selectedIdRef.current = selectedId }, [selectedId])
   useEffect(() => { busyRef.current = busy }, [busy])
+  useEffect(() => onGlobalError((message) => setError(message)), [])
 
   const pushActivity = useCallback((item: Omit<ActivityItem, 'id'>) => {
     activityIdRef.current += 1
