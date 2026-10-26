@@ -1388,6 +1388,7 @@
 .reader-actions {
   display: flex;
   justify-content: flex-end;
+  gap: 8px;
   flex: none;
 }
 
@@ -1395,6 +1396,14 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
+  flex: 1 1 auto;
+  min-height: 120px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.email-thread > * {
+  flex: none;
 }
 
 .email-msg {
@@ -1471,9 +1480,10 @@
 
 /* ── Composer / draft panel ───────────────────────────────────────────── */
 .composer {
-  margin-top: 20px;
+  margin-top: 16px;
   display: flex;
   flex-direction: column;
+  flex: none;
   overflow: hidden;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -1487,6 +1497,10 @@
   gap: 10px;
   padding: 14px 18px;
   border-bottom: 1px solid var(--border);
+}
+
+.composer.collapsed .composer-topbar {
+  border-bottom: none;
 }
 
 .composer-title {
@@ -1654,6 +1668,24 @@
   outline: none;
   border-color: var(--primary);
   box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+}
+
+.callout {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--warning-weak);
+  color: var(--warning);
+  font-size: 12px;
+}
+
+.callout .linkbtn {
+  color: inherit;
+  text-decoration: underline;
 }
 
 .empty {

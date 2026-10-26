@@ -150,7 +150,7 @@ export function ComposePanel({ ai, mailbox, repo, ownEmail, signature, testMode,
           <input className="instruction" value={instruction} onChange={(e) => setInstruction(e.target.value)} placeholder="Nudge: shorter, warmer, ask a question…" />
           <button type="button" className="btn btn-ghost btn-sm" disabled={sending} onClick={onCancel}>Cancel</button>
           <button type="button" className="regen" disabled={generating || !ai} onClick={() => void generate(body || undefined)}>Generate</button>
-          <button type="button" className="send" disabled={!mailbox || !repo || sending || generating || testMode || !to.trim() || !body.trim()} onClick={() => void send()}>{sending ? 'Sending…' : 'Send'}</button>
+          <button type="button" className="send" disabled={!mailbox || !repo || sending || generating || testMode || !to.trim() || !body.trim()} onClick={() => void send()}>{sending ? 'Sending…' : 'Send cold email'}</button>
         </div>
         {error && <div className="banner error">{error}</div>}
         {testMode && <span className="hint">Test mode is on — nothing is sent. Turn it off to send for real.</span>}

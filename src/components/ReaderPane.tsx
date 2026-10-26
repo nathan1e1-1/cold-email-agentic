@@ -12,12 +12,12 @@ function contactFor(thread: Thread): Address | null {
   return thread.participants[0] ?? null
 }
 
-export function ReaderPane({ thread, onTrash, trashBusy }: { thread: Thread; onTrash?: () => void; trashBusy?: boolean }) {
+export function ReaderPane({ thread, onTrash, trashBusy, onReply }: { thread: Thread; onTrash?: () => void; trashBusy?: boolean; onReply?: () => void }) {
   const contact = contactFor(thread)
   const contactName = contact?.name ?? contact?.email ?? 'Conversation'
 
   return (
-    <div className="email-thread">
+    <div className="email-thread" role="region" aria-label="Email thread" tabIndex={0}>
       <div className="reader-head">
         <Avatar name={contactName} />
         <div className="reader-head-main">
@@ -29,17 +29,22 @@ export function ReaderPane({ thread, onTrash, trashBusy }: { thread: Thread; onT
           </p>
           <p className="reader-subject">{thread.subject}</p>
         </div>
-        {onTrash && (
+        {(onReply || onTrash) && (
           <div className="reader-actions">
-            <button
-              type="button"
-              className="chip ghost danger"
-              disabled={trashBusy}
-              aria-label="Move conversation to Trash"
-              onClick={onTrash}
-            >
-              Trash
-            </button>
+            {onReply && (
+              <button type="button" className="btn btn-primary btn-sm" onClick={onReply}>Reply</button>
+            )}
+            {onTrash && (
+              <button
+                type="button"
+                className="chip ghost danger"
+                disabled={trashBusy}
+                aria-label="Move conversation to Trash"
+                onClick={onTrash}
+              >
+                Trash
+              </button>
+            )}
           </div>
         )}
       </div>
