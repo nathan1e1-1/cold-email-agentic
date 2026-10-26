@@ -243,7 +243,8 @@ export class NodeRepository implements Repository {
     ).map((r) => r.thread_id);
   }
 
-  async countSendsSince(sinceTs: number, kind: SendKind): Promise<number> {    const row = this.one<{ n: number }>(
+  async countSendsSince(sinceTs: number, kind: SendKind): Promise<number> {
+    const row = this.one<{ n: number }>(
       'SELECT COUNT(*) AS n FROM sends WHERE kind=? AND sent_at>=?', kind, sinceTs)!;
     return Number(row.n);
   }

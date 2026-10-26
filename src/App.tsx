@@ -4,6 +4,7 @@ import type { Account, Thread, TonePreset } from './domain/types'
 import type { AiProvider } from './ai/aiProvider'
 import { buildSystemPrompt, buildUserPrompt } from './ai/prompt'
 import type { MailboxProvider, ThreadPage } from './services/mailbox'
+import { mergeThreadPages } from './services/mailbox'
 import { excludeOwnEmail, isRelevantThread, recentRecipientEmails } from './mail/outreach'
 import { AUTO_REFRESH_TICK_MS, shouldAutoRefresh } from './mail/autoRefresh'
 import { createAiProvider, createMailboxProvider } from './services/providerFactory'
@@ -391,7 +392,7 @@ function App() {
     try {
       const page = await fetchInbox(mailbox, repo, nextPageToken)
       if (request !== inboxRequestRef.current) return
-      setThreads((prev) => [...prev, ...page.threads])
+      setThreads((prev) => mergeThreadPages(prev, page.threads))
       setNextPageToken(page.nextPageToken)
       setInboxOverflowed(page.overflowed ?? false)
       if (repo && account) {

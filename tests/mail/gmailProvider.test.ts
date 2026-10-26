@@ -245,3 +245,21 @@ describe('GmailProvider', () => {
     expect(delays).toEqual([3000]);
   });
 });
+
+describe('GmailProvider.getThreadsByIds', () => {
+  it('skips deleted threads (404) and keeps the rest', async () => {
+    const http = new FakeHttpClient().onRequest((req) => {
+      if (req.url.includes('/threads/t1')) {
+        return { status: 200, body: JSON.stringify(threadRes('t1', 'Sarah <sarah@acme.com>', 'Q3')) };
+      }
+      return { status: 404, body: '{"error":{"message":"Requested entity was not found."}}' };
+    });
+    const threads = await provider(http).getThreadsByIds(['t1', 'gone']);
+    expect(threads.map((t) => t.id)).toEqual(['t1']);
+  });
+
+  it('propagates non-404 failures', async () => {
+    const http = new FakeHttpClient().onRequest(() => ({ status: 401, body: '{"error":{"message":"Invalid credentials"}}' }));
+    await expect(provider(http).getThreadsByIds(['t1'])).rejects.toThrow(/401|Invalid credentials/);
+  });
+});

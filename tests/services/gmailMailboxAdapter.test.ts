@@ -384,3 +384,34 @@ describe('GmailMailboxAdapter known-thread pagination', () => {
     expect(second.threads.map((t) => t.id)).toEqual(['t1']);
   });
 });
+
+
+describe('GmailMailboxAdapter known-thread edge cases', () => {
+  it('fetches known threads even when there are no recent recipients', async () => {
+    const alias: Thread = {
+      ...thread,
+      id: 't9',
+      messages: [{ ...thread.messages[0], from: { email: 'alias@x.com' } }],
+    };
+    const { provider } = fakeProvider({ getThreadsByIds: async () => [alias] });
+    const adapter = new GmailMailboxAdapter(() => provider);
+    await adapter.connect();
+
+    const page = await adapter.listThreads({ outreachRecipients: [], knownThreadIds: ['t9'] });
+    expect(page.threads.map((t) => t.id)).toEqual(['t9']);
+  });
+
+  it('excludes trashed or spam-known threads from the inbox', async () => {
+    const trashed: Thread = { ...thread, id: 't9', labels: ['TRASH'] };
+    const spam: Thread = { ...thread, id: 't8', labels: ['SPAM'] };
+    const { provider } = fakeProvider({ getThreadsByIds: async () => [trashed, spam] });
+    const adapter = new GmailMailboxAdapter(() => provider);
+    await adapter.connect();
+
+    const page = await adapter.listThreads({
+      outreachRecipients: ['sarah@acme.com'],
+      knownThreadIds: ['t9', 't8'],
+    });
+    expect(page.threads.map((t) => t.id)).toEqual(['t1']);
+  });
+});

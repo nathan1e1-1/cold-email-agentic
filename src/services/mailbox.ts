@@ -22,6 +22,11 @@ export interface ThreadQueryOptions {
   trashed?: boolean;
 }
 
+export function mergeThreadPages(existing: Thread[], incoming: Thread[]): Thread[] {
+  const seen = new Set(existing.map((t) => t.id));
+  return [...existing, ...incoming.filter((t) => !seen.has(t.id))];
+}
+
 export interface SentNewEmail {
   message: Message;
   threadId: string;

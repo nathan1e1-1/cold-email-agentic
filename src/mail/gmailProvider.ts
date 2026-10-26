@@ -135,10 +135,21 @@ export class GmailProvider implements MailProvider {
   }
 
   async getThreadsByIds(ids: string[]): Promise<Thread[]> {
-    return mapWithConcurrency(ids, this.concurrency, (id) => this.getThread(id), {
-      sleep: this.sleep,
-      minIntervalMs: this.throttleMs,
-    });
+    const threads = await mapWithConcurrency(
+      ids,
+      this.concurrency,
+      async (id) => {
+        try {
+          return await this.getThread(id);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          if (/404|not found/i.test(message)) return null; // deleted/removed thread
+          throw err;
+        }
+      },
+      { sleep: this.sleep, minIntervalMs: this.throttleMs },
+    );
+    return threads.filter((t): t is Thread => t !== null);
   }
 
   async send(input: DraftInput): Promise<{ messageId: string; threadId: string }> {

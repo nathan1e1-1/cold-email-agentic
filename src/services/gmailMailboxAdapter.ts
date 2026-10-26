@@ -19,7 +19,11 @@ async function mergeKnown(
   if (known.length === 0) return current;
   const extra = await provider.getThreadsByIds(known);
   const keep = extra.filter(
-    (t) => !isJunkThread(t) && t.messages.some((m) => m.direction === 'inbound'),
+    (t) =>
+      !isJunkThread(t) &&
+      !t.labels.includes('TRASH') &&
+      !t.labels.includes('SPAM') &&
+      t.messages.some((m) => m.direction === 'inbound'),
   );
   const byId = new Map([...current, ...keep].map((t) => [t.id, t]));
   return [...byId.values()]
@@ -75,11 +79,16 @@ export class GmailMailboxAdapter implements MailboxProvider {
       return { threads: page.threads, nextPageToken: page.nextPageToken ?? null };
     }
 
-    const query = buildOutreachQuery(recipients);
-    if (!query) return { threads: [], nextPageToken: null };
-
     const inTrash = opts?.trashed ?? false;
     const known = inTrash ? [] : (opts?.knownThreadIds ?? []);
+
+    const query = buildOutreachQuery(recipients);
+    if (!query) {
+      // No recent recipients -> the from: query is empty, but known cold threads
+      // can still have replies (older sends / aliases). Fetch those directly.
+      const threads = opts?.pageToken ? [] : await mergeKnown([], provider, known);
+      return { threads, nextPageToken: null };
+    }
 
     if (query.length <= OUTREACH_QUERY_BUDGET) {
       const args = {
