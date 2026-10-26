@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS accounts (
   own_email TEXT NOT NULL,
   display_name TEXT,
   token_ref TEXT NOT NULL,
+  -- retired: history sync removed; column kept for migration compatibility
   history_id TEXT,
   created_at INTEGER NOT NULL
 );
@@ -87,8 +88,12 @@ const MIGRATION_2 = `
 ALTER TABLE threads ADD COLUMN history_id TEXT;
 `;
 
+const MIGRATION_3 = `
+ALTER TABLE sends ADD COLUMN thread_id TEXT;
+`;
+
 // Ordered, append-only. Each entry is applied once and bumps PRAGMA user_version.
-export const MIGRATIONS: readonly string[] = [MIGRATION_1, MIGRATION_2];
+export const MIGRATIONS: readonly string[] = [MIGRATION_1, MIGRATION_2, MIGRATION_3];
 
 export function migrate(db: Sqlite): void {
   db.exec('PRAGMA foreign_keys = ON;');

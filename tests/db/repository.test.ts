@@ -26,6 +26,22 @@ describe('migrate', () => {
     const row = db.prepare('PRAGMA user_version').get() as { user_version: number };
     expect(row.user_version).toBe(MIGRATIONS.length);
   });
+
+  it('upgrades a version 2 database by adding the sends thread_id column', () => {
+    const db = new DatabaseSync(':memory:');
+    db.exec(MIGRATIONS[0]);
+    db.exec(MIGRATIONS[1]);
+    db.exec('PRAGMA user_version = 2');
+    const before = db.prepare('PRAGMA table_info(sends)').all() as { name: string }[];
+    expect(before.map((c) => c.name)).not.toContain('thread_id');
+
+    migrate(db as any);
+
+    const after = db.prepare('PRAGMA table_info(sends)').all() as { name: string }[];
+    expect(after.map((c) => c.name)).toContain('thread_id');
+    const row = db.prepare('PRAGMA user_version').get() as { user_version: number };
+    expect(row.user_version).toBe(MIGRATIONS.length);
+  });
 });
 
 describe('NodeRepository', () => {
@@ -41,17 +57,15 @@ describe('NodeRepository', () => {
       messages: [], lastMessageAt, snippet: '', inInbox: true });
   }
 
-  it('persists an account, updates it in place, and scopes history id', async () => {
+  it('persists an account and updates it in place', async () => {
     const repo = mk();
     const a1 = await repo.upsertAccount({ provider: 'gmail', email: 'me@x.com', ownEmail: 'me@x.com',
       tokenRef: 'gmail/token', createdAt: 1 });
-    await repo.setHistoryId(a1.rowId, 'h123');
     const a2 = await repo.upsertAccount({ provider: 'gmail', email: 'me@x.com', ownEmail: 'me@x.com',
       displayName: 'Me', tokenRef: 'gmail/token2', createdAt: 1 });
     expect(a2.rowId).toBe(a1.rowId);
     const acc = await repo.getAccount();
     expect(acc?.email).toBe('me@x.com');
-    expect(acc?.historyId).toBe('h123');
     expect(acc?.displayName).toBe('Me');
     expect(acc?.tokenRef).toBe('gmail/token2');
   });
@@ -92,6 +106,55 @@ describe('NodeRepository', () => {
     expect(m.references).toEqual(['<m0@x>']);
     expect(m.hasListUnsubscribe).toBe(true);
     expect(m.bodyHtml).toBe('<p>hello</p>');
+  });
+
+  it('deletes a thread with its drafts, messages, and card, leaving others intact', async () => {
+    const repo = mk();
+    const acc = await seedAccount(repo);
+    const first = await seedThread(repo, acc.rowId, 'thr1');
+    const second = await seedThread(repo, acc.rowId, 'thr2', 2);
+    await repo.upsertMessage(first.rowId, {
+      id: 'm1',
+      rfcMessageId: '<m1@x>',
+      references: ['<m0@x>'],
+      from: { name: 'Sarah', email: 'sarah@acme.com' },
+      to: [{ name: 'Me', email: 'me@x.com' }],
+      cc: [{ email: 'cc@x.com' }],
+      subject: 'Hi',
+      bodyText: 'hello',
+      bodyHtml: '<p>hello</p>',
+      hasListUnsubscribe: false,
+      date: 5,
+      direction: 'inbound',
+    });
+    await repo.upsertMessage(second.rowId, {
+      id: 'm2',
+      rfcMessageId: '<m2@x>',
+      references: [],
+      from: { email: 'other@y.com' },
+      to: [{ email: 'me@x.com' }],
+      cc: [],
+      subject: 'Other',
+      bodyText: 'keep me',
+      hasListUnsubscribe: false,
+      date: 6,
+      direction: 'inbound',
+    });
+    const firstCard = await repo.createCard(first.rowId, 'untouched', 1);
+    const secondCard = await repo.createCard(second.rowId, 'untouched', 2);
+    await repo.createDraft({
+      cardId: firstCard.id, contactId: null, body: 'a', model: 'gemini',
+      tone: 'professional', instruction: '', createdAt: 1,
+    });
+
+    await repo.deleteThreadByProviderId('thr1');
+
+    expect((await repo.listThreads()).map((t) => t.id)).toEqual(['thr2']);
+    expect(await repo.listMessages(first.rowId)).toEqual([]);
+    expect((await repo.listMessages(second.rowId)).map((m) => m.id)).toEqual(['m2']);
+    expect((await repo.listCards()).map((c) => c.id)).toEqual([secondCard.id]);
+    expect(await repo.listDrafts(firstCard.id)).toEqual([]);
+    await expect(repo.deleteThreadByProviderId('missing')).resolves.toBeUndefined();
   });
 
   it('creates and moves cards, and chooses a draft', async () => {
@@ -193,19 +256,46 @@ describe('NodeRepository', () => {
     expect(await repo.hasColdSendTo('replyonly@z.com')).toBe(false);
   });
 
+  it('lists distinct cold recipients, newest first, including the account address', async () => {
+    const repo = mk();
+    await repo.upsertAccount({ provider: 'gmail', email: 'Me@X.com', ownEmail: 'Me@X.com',
+      tokenRef: 't', createdAt: 1 });
+    await repo.recordSend(1000, 'cold', ' A@Z.com ', 'thr-1');
+    await repo.recordSend(2000, 'cold', 'b@z.com', 'thr-2');
+    await repo.recordSend(3000, 'cold', 'a@z.com', 'thr-3');
+    await repo.recordSend(4000, 'reply', 'replyonly@z.com');
+    await repo.recordSend(5000, 'cold', ' ME@X.COM ', 'thr-self');
+
+    expect(await repo.listColdRecipients()).toEqual([
+      { email: 'me@x.com', lastSentAt: 5000 },
+      { email: 'a@z.com', lastSentAt: 3000 },
+      { email: 'b@z.com', lastSentAt: 2000 },
+    ]);
+  });
+
+  it('persists the sent thread id on the send row', async () => {
+    const repo = mk();
+    await repo.recordSend(1000, 'cold', 'a@z.com', 'thr-1');
+    await repo.recordSend(2000, 'cold', 'b@z.com');
+    const db = (repo as unknown as { db: DatabaseSync }).db;
+    const rows = db.prepare('SELECT thread_id FROM sends ORDER BY id ASC').all() as { thread_id: string | null }[];
+    expect(rows[0].thread_id).toBe('thr-1');
+    expect(rows[1].thread_id).toBeNull();
+  });
+
+  it('lists distinct cold thread ids', async () => {
+    const repo = new NodeRepository(':memory:');
+    await repo.recordSend(1, 'cold', 'a@x.com', 't1');
+    await repo.recordSend(2, 'cold', 'a@x.com', 't1');
+    await repo.recordSend(3, 'cold', 'b@x.com', 't2');
+    await repo.recordSend(4, 'reply', 'c@x.com', 't3');
+    expect((await repo.listColdThreadIds()).sort()).toEqual(['t1', 't2']);
+  });
+
   it('stores settings', async () => {
     const repo = mk();
     await repo.setSetting('rate_limit_per_day', '25');
     expect(await repo.getSetting('rate_limit_per_day')).toBe('25');
     expect(await repo.getSetting('missing')).toBeNull();
-  });
-
-  it('stores a per-thread historyId', async () => {
-    const repo = mk();
-    const acc = await seedAccount(repo);
-    const t = { id: 'thr1', accountId: acc.rowId, subject: '', participants: [], labels: [],
-      messages: [], lastMessageAt: 1, snippet: '', inInbox: true, historyId: '500' };
-    expect((await repo.upsertThread(t)).historyId).toBe('500');
-    expect((await repo.upsertThread({ ...t, historyId: '600' })).historyId).toBe('600');
   });
 });

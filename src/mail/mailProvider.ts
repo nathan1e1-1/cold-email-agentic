@@ -11,32 +11,27 @@ export interface DraftInput {
   listUnsubscribeMailto?: string;
 }
 
-export interface HistoryDelta {
-  changedThreadIds: string[];
-  deletedThreadIds: string[];
-  nextHistoryId: string;
-  expired: boolean;
-}
-
 export interface ListThreadsResult {
   threads: Thread[];
-  seededHistoryId: string;
   nextPageToken: string | null;
 }
 
 export interface GmailProfile {
   emailAddress: string;
-  historyId: string;
 }
 
 export interface MailProvider {
   auth(): Promise<void>;
   isAuthed(): Promise<boolean>;
   getProfile(): Promise<GmailProfile>;
-  listThreads(opts: { sinceDays: number; cap: number; query?: string; pageToken?: string }): Promise<ListThreadsResult>;
+  listThreads(opts: {
+    sinceDays: number; cap: number; query?: string; pageToken?: string; inInbox?: boolean;
+    inTrash?: boolean;
+  }): Promise<ListThreadsResult>;
   getThread(id: string): Promise<Thread>;
   getThreadsByIds(ids: string[]): Promise<Thread[]>;
-  listHistoryChanges(opts: { historyId: string }): Promise<HistoryDelta>;
   send(input: DraftInput): Promise<{ messageId: string; threadId: string }>;
   findOwnLatestReply(threadId: string): Promise<{ isReply: boolean }>;
+  trashThread(id: string): Promise<void>;
+  untrashThread(id: string): Promise<void>;
 }

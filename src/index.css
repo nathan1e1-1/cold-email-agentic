@@ -1,58 +1,106 @@
 :root {
-  --bg: #f6f8f8;
+  /* Surfaces */
+  --canvas: #faf8ff;
   --surface: #ffffff;
-  --surface-2: #eef2f1;
-  --text: #1c2626;
-  --text-muted: #5d6b6a;
-  --text-faint: #8a9694;
-  --border: #e4e9e8;
-  --border-strong: #d3dbd9;
-  --primary: #0f766e;
-  --primary-hover: #115e56;
-  --primary-weak: #e6f5f2;
+  --surface-low: #f2f3ff;
+  --surface-mid: #eaedff;
+  --border: #e2e7ff;
+  --border-strong: #c7c4d8;
+
+  /* Text */
+  --text: #131b2e;
+  --text-muted: #464555;
+  --text-faint: #777587;
+
+  /* Brand */
+  --primary: #4f46e5;
+  --primary-deep: #3525cd;
+  --primary-weak: #e2dfff;
+  --primary-softer: #eeecff;
   --on-primary: #ffffff;
-  --danger: #dc2626;
-  --danger-weak: #fdeceb;
-  --success: #0f8a5f;
-  --success-weak: #e6f6ee;
-  --ring: #0f766e;
-  --shadow-sm: 0 1px 2px rgba(16, 32, 30, 0.06);
 
+  /* Feedback */
+  --danger: #ba1a1a;
+  --danger-weak: #ffdad6;
+  --success: #005338;
+  --success-soft: #6ffbbe;
+  --success-weak: #e4f9ef;
+  --warning: #92400e;
+  --warning-weak: #fde68a;
+  --info: #4e45d5;
+
+  --ring: #6366f1;
+
+  /* Controls */
+  --input-border: #cbd5e1;
+  --switch-track: #d6d3e6;
+  --topbar-bg: rgba(255, 255, 255, 0.82);
+  --danger-surface: #fff7f6;
+
+  /* Elevation */
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 4px 12px -2px rgba(15, 23, 42, 0.06), 0 2px 4px -2px rgba(15, 23, 42, 0.04);
+  --shadow-header: 0 1px 8px rgba(0, 0, 0, 0.04);
+
+  /* Shape */
+  --radius-xs: 4px;
   --radius-sm: 8px;
-  --radius: 12px;
-  --radius-lg: 16px;
+  --radius: 8px;
+  --radius-lg: 12px;
 
-  color-scheme: light dark;
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  font-size: 15px;
+  --font-heading: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif;
+  --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  color-scheme: light;
+  font-family: var(--font-body);
+  font-size: 14px;
   line-height: 1.5;
   color: var(--text);
-  background: var(--bg);
+  background: var(--canvas);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0e1413;
-    --surface: #161d1c;
-    --surface-2: #1e2726;
-    --text: #e8efee;
-    --text-muted: #9aa8a6;
-    --text-faint: #6f7d7b;
-    --border: #26302f;
-    --border-strong: #33403e;
-    --primary: #2dd4bf;
-    --primary-hover: #5eead4;
-    --primary-weak: #11302c;
-    --on-primary: #05201c;
-    --danger: #f87171;
-    --danger-weak: #2a1616;
-    --success: #34d399;
-    --success-weak: #0f2a20;
-    --ring: #2dd4bf;
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-  }
+:root[data-theme='dark'] {
+  --canvas: #0b0f1d;
+  --surface: #121830;
+  --surface-low: #161d36;
+  --surface-mid: #1d2547;
+  --border: #262e52;
+  --border-strong: #3a4370;
+
+  --text: #eef0ff;
+  --text-muted: #b4bbd9;
+  --text-faint: #8b93b8;
+
+  --primary: #5b54ee;
+  --primary-deep: #8b84ff;
+  --primary-weak: #2a2b5e;
+  --primary-softer: #1e2244;
+  --on-primary: #ffffff;
+
+  --danger: #ffb4ab;
+  --danger-weak: #4a2121;
+  --danger-surface: #341a1a;
+  --success: #6ffbbe;
+  --success-soft: #2e7d5d;
+  --success-weak: #123529;
+  --warning: #ffd28a;
+  --warning-weak: #4a3513;
+  --info: #a9a3ff;
+
+  --ring: #8b84ff;
+
+  --input-border: #3a4370;
+  --switch-track: #3a4370;
+  --topbar-bg: rgba(18, 24, 48, 0.82);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 4px 12px -2px rgba(0, 0, 0, 0.45), 0 2px 4px -2px rgba(0, 0, 0, 0.35);
+  --shadow-header: 0 1px 8px rgba(0, 0, 0, 0.35);
+
+  color-scheme: dark;
 }
 
 * {
@@ -67,8 +115,15 @@ body,
 }
 
 body {
-  background: var(--bg);
+  background: var(--canvas);
   color: var(--text);
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-heading);
 }
 
 button {
@@ -77,9 +132,20 @@ button {
   cursor: pointer;
 }
 
+input,
+textarea,
+select {
+  font: inherit;
+}
+
 :focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
+}
+
+::selection {
+  background: var(--primary-weak);
+  color: var(--text);
 }
 
 @media (prefers-reduced-motion: reduce) {

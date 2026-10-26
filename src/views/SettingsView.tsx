@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { loadSettings, saveSettings, SECRET_KEYS, type StoredSettings } from '../services/appSettings'
 import { setSecret } from '../services/secrets'
-import { SettingsService } from '../services/settings'
-import type { Repository } from '../db/repository'
+import { applyTheme, loadTheme, saveTheme, type Theme } from '../services/theme'
 
-export function SettingsView({ repo, onSaved }: { repo: Repository | null; onSaved: () => void }) {
+export function SettingsView({ onSaved, onReconnect }: { onSaved: () => void; onReconnect: () => void }) {
   const [settings, setSettings] = useState<StoredSettings>(loadSettings())
+  const [theme, setTheme] = useState<Theme>(loadTheme)
   const [clientSecret, setClientSecret] = useState('')
   const [geminiKey, setGeminiKey] = useState('')
   const [groqKey, setGroqKey] = useState('')
@@ -19,11 +19,6 @@ export function SettingsView({ repo, onSaved }: { repo: Repository | null; onSav
     setSaved(false)
     try {
       saveSettings(settings)
-      if (repo) {
-        const svc = new SettingsService(repo)
-        await svc.set('mailing_address', settings.mailingAddress)
-        await svc.set('unsubscribe_line', settings.unsubscribeLine)
-      }
       if (clientSecret) await setSecret(SECRET_KEYS.googleClientSecret, clientSecret)
       if (geminiKey) await setSecret(SECRET_KEYS.geminiApiKey, geminiKey)
       if (groqKey) await setSecret(SECRET_KEYS.groqApiKey, groqKey)
@@ -37,13 +32,56 @@ export function SettingsView({ repo, onSaved }: { repo: Repository | null; onSav
     }
   }
 
+  const setThemeMode = (dark: boolean) => {
+    const next: Theme = dark ? 'dark' : 'light'
+    setTheme(next)
+    applyTheme(next)
+    saveTheme(next)
+  }
+
   return (
-    <div className="view">
-      <h1 className="view-title">Settings</h1>
-      <p className="view-sub">Credentials and cold-email guardrails. Secrets are stored locally in a 0600 file on this Mac.</p>
+    <div className="view settings-view">
+      <header className="page-head">
+        <div className="page-head-main">
+          <h1 className="view-title">Settings</h1>
+          <p className="view-sub">Credentials, AI keys, and writing preferences. Secrets are stored locally in a 0600 file on this Mac.</p>
+        </div>
+      </header>
 
       <div className="card settings-card">
-        <div className="card-head"><span className="card-title">Gmail</span></div>
+        <div className="card-head">
+          <div className="card-head-main">
+            <span className="card-title">Appearance</span>
+            <span className="card-sub">Choose how the app looks</span>
+          </div>
+        </div>
+        <div className="settings-row">
+          <div className="settings-row-main">
+            <span className="settings-row-title">Dark mode</span>
+            <span className="settings-row-sub">Use the darker palette across the app</span>
+          </div>
+          <label className="toggle switch">
+            <input
+              type="checkbox"
+              aria-label="Dark mode"
+              checked={theme === 'dark'}
+              onChange={(e) => setThemeMode(e.target.checked)}
+            />
+            <span className="switch-track" aria-hidden="true">
+              <span className="switch-thumb" />
+            </span>
+            <span className="switch-label">{theme === 'dark' ? 'Dark' : 'Light'}</span>
+          </label>
+        </div>
+      </div>
+
+      <div className="card settings-card">
+        <div className="card-head">
+          <div className="card-head-main">
+            <span className="card-title">Gmail</span>
+            <span className="card-sub">OAuth credentials for sending and syncing</span>
+          </div>
+        </div>
         <label className="field">
           <span>Google Client ID</span>
           <input
@@ -60,10 +98,18 @@ export function SettingsView({ repo, onSaved }: { repo: Repository | null; onSav
           <span>OAuth redirect URI</span>
           <input value={settings.redirectUri} onChange={(e) => setSettings({ ...settings, redirectUri: e.target.value })} />
         </label>
+        <div className="settings-actions">
+          <button type="button" className="btn btn-secondary" onClick={onReconnect}>Reconnect Gmail</button>
+        </div>
       </div>
 
       <div className="card settings-card">
-        <div className="card-head"><span className="card-title">AI drafter</span></div>
+        <div className="card-head">
+          <div className="card-head-main">
+            <span className="card-title">AI drafter</span>
+            <span className="card-sub">Choose the model that writes your replies</span>
+          </div>
+        </div>
         <label className="field">
           <span>Provider</span>
           <select
@@ -85,32 +131,18 @@ export function SettingsView({ repo, onSaved }: { repo: Repository | null; onSav
       </div>
 
       <div className="card settings-card">
-        <div className="card-head"><span className="card-title">Writing</span></div>
+        <div className="card-head">
+          <div className="card-head-main">
+            <span className="card-title">Writing</span>
+            <span className="card-sub">Defaults applied to generated drafts</span>
+          </div>
+        </div>
         <label className="field">
           <span>Signature <em>· appended to generated drafts</em></span>
           <input
             value={settings.signature}
             onChange={(e) => setSettings({ ...settings, signature: e.target.value })}
             placeholder="— Nathan"
-          />
-        </label>
-      </div>
-
-      <div className="card settings-card">
-        <div className="card-head"><span className="card-title">Cold-email guardrails</span></div>
-        <label className="field">
-          <span>Mailing address <em>· required to cold email</em></span>
-          <input
-            value={settings.mailingAddress}
-            onChange={(e) => setSettings({ ...settings, mailingAddress: e.target.value })}
-            placeholder="123 Main St, City, State ZIP"
-          />
-        </label>
-        <label className="field">
-          <span>Unsubscribe line <em>· appended to cold emails</em></span>
-          <input
-            value={settings.unsubscribeLine}
-            onChange={(e) => setSettings({ ...settings, unsubscribeLine: e.target.value })}
           />
         </label>
       </div>

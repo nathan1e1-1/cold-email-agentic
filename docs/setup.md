@@ -22,7 +22,7 @@ rustc --version && cargo --version
    - **Contact information**: your email. Agree and create.
    - On the **Branding** page, complete the required fields — **App name**, **User support email**, and **Developer contact information** (email). Google blocks publishing until branding is complete. (Logo, homepage, privacy, and terms links are optional for personal use.)
    - On the **Audience** page, set **Publishing status → Publish app** (**In production**). Unverified is fine for personal use (<100 users). *Do not leave it in "Testing"* — Testing refresh tokens expire in 7 days.
-   - On the **Data Access** page, add scopes: `gmail.readonly`, `gmail.send`, `userinfo.email`.
+   - On the **Data Access** page, add scopes: `gmail.readonly`, `gmail.send`, `gmail.modify`, `userinfo.email`.
    - **Verification is not required for personal use.** `gmail.readonly` is a *restricted* scope, but Google exempts **Personal Use apps (fewer than 100 users)** from verification: you can stay **In production, unverified** and click through the "unverified app" warning at sign-in. The security assessment for restricted scopes applies only to apps that store/transmit that data on a **server** — this app is local-only, so none is needed. (The 100-user cap stays until you'd ever verify; you don't need to.) You must still follow Google's API Services User Data Policy — see `PRIVACY.md`.
 4. **Google Auth Platform → Clients → Create client**:
    - Application type: **Desktop app**. (No redirect URIs to register — desktop clients use the loopback flow with any `http://127.0.0.1:PORT`.)
@@ -30,7 +30,7 @@ rustc --version && cargo --version
 5. Use them: for the draft script, pass them as `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` env vars (see §6). The app stores the resulting tokens locally on your Mac in a `0600` file.
 
 
-> Security: the app requests only `gmail.readonly`, `gmail.send`, and `userinfo.email`. Tokens are stored locally in a `0600` file, never logged.
+> Security: the app requests only `gmail.readonly`, `gmail.send`, `gmail.modify`, and `userinfo.email`. Tokens are stored locally in a `0600` file, never logged.
 
 ## 3. Free AI key (Gemini)
 

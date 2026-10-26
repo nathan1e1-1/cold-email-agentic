@@ -34,7 +34,6 @@ export interface Thread {
   snippet: string;
   inInbox: boolean;
   labels: string[];
-  historyId?: string | null;
 }
 
 export interface Account {
@@ -58,6 +57,11 @@ export interface Card {
   status: CardStatus;
   position: number;
   updatedAt: number;
+}
+
+export interface ColdRecipient {
+  email: string;
+  lastSentAt: number;
 }
 
 export interface Draft {

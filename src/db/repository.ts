@@ -1,16 +1,14 @@
-import type { Account, Card, CardStatus, Contact, Draft, Message, SendKind, Thread } from '../domain/types';
+import type { Account, Card, CardStatus, ColdRecipient, Contact, Draft, Message, SendKind, Thread } from '../domain/types';
 
 export interface RepoAccount extends Account {
   rowId: number;
   tokenRef: string;
-  historyId: string | null;
   createdAt: number;
 }
 
 export interface RepoThread extends Thread {
   rowId: number;
   accountId: number;
-  historyId: string | null;
 }
 
 export interface Repository {
@@ -18,12 +16,12 @@ export interface Repository {
 
   upsertAccount(a: Account & { tokenRef: string; createdAt: number }): Promise<RepoAccount>;
   getAccount(): Promise<RepoAccount | null>;
-  setHistoryId(accountId: number, historyId: string): Promise<void>;
 
   upsertThread(t: Thread & { accountId: number }): Promise<RepoThread>;
   getThreadByProviderId(providerThreadId: string): Promise<RepoThread | null>;
   listThreads(): Promise<RepoThread[]>;
   deleteMessages(providerMessageIds: string[]): Promise<void>;
+  deleteThreadByProviderId(providerThreadId: string): Promise<void>;
   upsertMessage(threadRowId: number, m: Message): Promise<void>;
   listMessages(threadRowId: number): Promise<Message[]>;
 
@@ -44,7 +42,12 @@ export interface Repository {
   listDrafts(cardId: number): Promise<Draft[]>;
   chooseDraft(draftId: number, cardId: number): Promise<void>;
 
-  recordSend(sentAt: number, kind: SendKind, toEmail: string): Promise<void>;
+  recordSend(sentAt: number, kind: SendKind, toEmail: string, threadId?: string): Promise<void>;
+  /** Distinct cold recipients (lowercased), newest cold send first; callers exclude the account's own address unless testing. */
+  listColdRecipients(): Promise<ColdRecipient[]>;
+  /** Thread IDs we started (sends.thread_id), for direct lookup regardless of sender or age. */
+  /** Cold-send thread ids; pass the account address to omit self-sent threads. */
+  listColdThreadIds(excludeEmail?: string): Promise<string[]>;
   countSendsSince(sinceTs: number, kind: SendKind): Promise<number>;
   hasColdSendTo(email: string): Promise<boolean>;
 

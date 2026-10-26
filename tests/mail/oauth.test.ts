@@ -43,6 +43,7 @@ describe('oauth', () => {
     expect(q.get('access_type')).toBe('offline');
     expect(q.get('scope')).toContain('gmail.readonly');
     expect(q.get('scope')).toContain('gmail.send');
+    expect(q.get('scope')).toContain('gmail.modify');
   });
 
   it('exchanges a code for tokens', async () => {

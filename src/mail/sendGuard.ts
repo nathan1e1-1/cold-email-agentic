@@ -3,7 +3,6 @@ import type { SendKind } from '../domain/types';
 import { SETTING_DEFAULTS, type SettingKey, type SettingsService } from '../services/settings';
 
 export type GuardReason =
-  | 'missing_mailing_address'
   | 'do_not_contact'
   | 'rate_limit_day'
   | 'rate_limit_minute';
@@ -33,11 +32,6 @@ export async function sendGuard(
   input: GuardInput,
 ): Promise<GuardResult> {
   const now = input.now ?? Date.now();
-
-  if (input.kind === 'cold') {
-    const mailingAddress = (await settings.get('mailing_address')).trim();
-    if (mailingAddress === '') return { ok: false, reason: 'missing_mailing_address' };
-  }
 
   const contact = await repo.getContactByEmail(input.toEmail);
   if (contact?.doNotContact) return { ok: false, reason: 'do_not_contact' };

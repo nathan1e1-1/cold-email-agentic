@@ -6,9 +6,44 @@ function addr(a: Address): string {
   return a.name ? `${a.name} <${a.email}>` : a.email
 }
 
-export function ReaderPane({ thread }: { thread: Thread }) {
+function contactFor(thread: Thread): Address | null {
+  const lastInbound = [...thread.messages].reverse().find((m) => m.direction === 'inbound')
+  if (lastInbound) return lastInbound.from
+  return thread.participants[0] ?? null
+}
+
+export function ReaderPane({ thread, onTrash, trashBusy }: { thread: Thread; onTrash?: () => void; trashBusy?: boolean }) {
+  const contact = contactFor(thread)
+  const contactName = contact?.name ?? contact?.email ?? 'Conversation'
+
   return (
     <div className="email-thread">
+      <div className="reader-head">
+        <Avatar name={contactName} />
+        <div className="reader-head-main">
+          <h1 className="reader-contact">{contactName}</h1>
+          <p className="reader-meta">
+            {contact?.email ?? 'Unknown sender'}
+            <span className="dot-sep" aria-hidden="true">·</span>
+            {thread.messages.length} message{thread.messages.length === 1 ? '' : 's'}
+          </p>
+          <p className="reader-subject">{thread.subject}</p>
+        </div>
+        {onTrash && (
+          <div className="reader-actions">
+            <button
+              type="button"
+              className="chip ghost danger"
+              disabled={trashBusy}
+              aria-label="Move conversation to Trash"
+              onClick={onTrash}
+            >
+              Trash
+            </button>
+          </div>
+        )}
+      </div>
+
       {thread.messages.map((m) => {
         const who = m.direction === 'outbound' ? 'You' : m.from.name ?? m.from.email
         return (

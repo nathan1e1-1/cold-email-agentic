@@ -2,7 +2,7 @@ import type { Thread } from '../domain/types';
 import type { Authenticator } from './oauth';
 import type { HttpClient } from './httpClient';
 import type {
-  DraftInput, GmailProfile, HistoryDelta, ListThreadsResult, MailProvider,
+  DraftInput, GmailProfile, ListThreadsResult, MailProvider,
 } from './mailProvider';
 import { parseThread, type GmailThreadResource } from './gmailParse';
 import { buildMime } from './mime';
@@ -101,14 +101,21 @@ export class GmailProvider implements MailProvider {
   async getProfile(): Promise<GmailProfile> {
     const res = await this.request('GET', '/profile');
     ensureOk(res, 'Gmail getProfile');
-    const json = JSON.parse(res.body) as { emailAddress?: string; historyId?: string };
-    return { emailAddress: json.emailAddress ?? '', historyId: json.historyId ?? '0' };
+    const json = JSON.parse(res.body) as { emailAddress?: string };
+    return { emailAddress: json.emailAddress ?? '' };
   }
 
-  async listThreads(opts: { sinceDays: number; cap: number; query?: string; pageToken?: string }): Promise<ListThreadsResult> {
-    const q = encodeURIComponent(
-      [`in:inbox newer_than:${opts.sinceDays}d`, opts.query].filter(Boolean).join(' '),
-    );
+  async listThreads(opts: {
+    sinceDays: number; cap: number; query?: string; pageToken?: string; inInbox?: boolean;
+    inTrash?: boolean;
+  }): Promise<ListThreadsResult> {
+    const junk = ['-category:promotions', '-category:social', '-category:updates', '-category:forums'];
+    const base = opts.inTrash
+      ? [`in:trash newer_than:${opts.sinceDays}d`, ...junk]
+      : opts.inInbox === false
+        ? [`newer_than:${opts.sinceDays}d`, '-in:spam', '-in:trash', ...junk]
+        : [`in:inbox newer_than:${opts.sinceDays}d`];
+    const q = encodeURIComponent([base.join(' '), opts.query].filter(Boolean).join(' '));
     const page = opts.pageToken ? `&pageToken=${encodeURIComponent(opts.pageToken)}` : '';
     const res = await this.request('GET', `/threads?q=${q}&maxResults=${opts.cap}${page}`);
     ensureOk(res, 'Gmail listThreads');
@@ -118,8 +125,7 @@ export class GmailProvider implements MailProvider {
       sleep: this.sleep,
       minIntervalMs: this.throttleMs,
     });
-    const profile = await this.getProfile();
-    return { threads, seededHistoryId: profile.historyId, nextPageToken: json.nextPageToken ?? null };
+    return { threads, nextPageToken: json.nextPageToken ?? null };
   }
 
   async getThread(id: string): Promise<Thread> {
@@ -129,40 +135,21 @@ export class GmailProvider implements MailProvider {
   }
 
   async getThreadsByIds(ids: string[]): Promise<Thread[]> {
-    return mapWithConcurrency(ids, this.concurrency, (id) => this.getThread(id), {
-      sleep: this.sleep,
-      minIntervalMs: this.throttleMs,
-    });
-  }
-
-  async listHistoryChanges(opts: { historyId: string }): Promise<HistoryDelta> {
-    const res = await this.request(
-      'GET',
-      `/history?startHistoryId=${opts.historyId}&historyTypes=messageAdded,messageDeleted,labelAdded,labelRemoved`,
+    const threads = await mapWithConcurrency(
+      ids,
+      this.concurrency,
+      async (id) => {
+        try {
+          return await this.getThread(id);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          if (/404|not found/i.test(message)) return null; // deleted/removed thread
+          throw err;
+        }
+      },
+      { sleep: this.sleep, minIntervalMs: this.throttleMs },
     );
-    if (res.status === 404) {
-      return { changedThreadIds: [], deletedThreadIds: [], nextHistoryId: opts.historyId, expired: true };
-    }
-    ensureOk(res, 'Gmail history');
-    const json = JSON.parse(res.body) as {
-      historyId?: string;
-      history?: {
-        messagesAdded?: { message: { threadId: string } }[];
-        messagesDeleted?: { message: { threadId: string } }[];
-      }[];
-    };
-    const changed = new Set<string>();
-    const deleted = new Set<string>();
-    for (const record of json.history ?? []) {
-      for (const m of record.messagesAdded ?? []) changed.add(m.message.threadId);
-      for (const m of record.messagesDeleted ?? []) deleted.add(m.message.threadId);
-    }
-    return {
-      changedThreadIds: [...changed],
-      deletedThreadIds: [...deleted],
-      nextHistoryId: json.historyId ?? opts.historyId,
-      expired: false,
-    };
+    return threads.filter((t): t is Thread => t !== null);
   }
 
   async send(input: DraftInput): Promise<{ messageId: string; threadId: string }> {
@@ -191,5 +178,13 @@ export class GmailProvider implements MailProvider {
     const thread = await this.getThread(threadId);
     const last = thread.messages[thread.messages.length - 1];
     return { isReply: last?.direction === 'outbound' };
+  }
+
+  async trashThread(id: string): Promise<void> {
+    ensureOk(await this.request('POST', `/threads/${encodeURIComponent(id)}/trash`), 'Gmail trash');
+  }
+
+  async untrashThread(id: string): Promise<void> {
+    ensureOk(await this.request('POST', `/threads/${encodeURIComponent(id)}/untrash`), 'Gmail untrash');
   }
 }

@@ -1,7 +1,7 @@
 import type { Account, TonePreset } from '../domain/types'
-import { formatDate } from '../lib/format'
+import { formatDate, initials } from '../lib/format'
 
-export type View = 'outreach' | 'board' | 'inbox' | 'dashboard' | 'settings'
+export type View = 'inbox' | 'board' | 'dashboard' | 'trash' | 'settings'
 
 export interface ActivityItem {
   id: number
@@ -32,14 +32,6 @@ function NavIcon({ name }: { name: View }) {
       </svg>
     )
   }
-  if (name === 'outreach') {
-    return (
-      <svg {...common} aria-hidden="true">
-        <path d="M22 2 11 13" />
-        <path d="M22 2 15 22l-4-9-9-4 20-7z" />
-      </svg>
-    )
-  }
   if (name === 'dashboard') {
     return (
       <svg {...common} aria-hidden="true">
@@ -55,6 +47,16 @@ function NavIcon({ name }: { name: View }) {
       <svg {...common} aria-hidden="true">
         <path d="M3 12h5l2 3h4l2-3h5" />
         <path d="M5 5h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z" />
+      </svg>
+    )
+  }
+  if (name === 'trash') {
+    return (
+      <svg {...common} aria-hidden="true">
+        <polyline points="3 6 5 6 21 6" />
+        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+        <path d="M10 11v6M14 11v6" />
+        <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
       </svg>
     )
   }
@@ -86,12 +88,49 @@ function Chevron({ collapsed }: { collapsed: boolean }) {
   )
 }
 
+function ChevronRight() {
+  return (
+    <svg
+      className="nav-chevron"
+      width="15"
+      height="15"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <polyline points="9 6 15 12 9 18" />
+    </svg>
+  )
+}
+
+function SendMark() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M22 2 11 13" />
+      <path d="M22 2 15 22 11 13 2 9 22 2z" />
+    </svg>
+  )
+}
+
 const NAV: { id: View; label: string }[] = [
-  { id: 'outreach', label: 'Outreach' },
-  { id: 'board', label: 'Board' },
-  { id: 'inbox', label: 'Inbox' },
   { id: 'dashboard', label: 'Dashboard' },
-  { id: 'settings', label: 'Settings' },
+  { id: 'inbox', label: 'Inbox' },
+  { id: 'board', label: 'Board' },
+  { id: 'trash', label: 'Trash' },
 ]
 
 interface Props {
@@ -109,10 +148,22 @@ interface Props {
 export function Sidebar({
   view, onNavigate, account, activity, onOpenThread, busy, onConnect, collapsed, onToggle,
 }: Props) {
+  const identity = account?.email ?? 'Not connected'
+
   return (
     <aside className={collapsed ? 'sidebar collapsed' : 'sidebar'}>
       <div className="sidebar-head">
-        {!collapsed && <div className="sidebar-brand">ColdEmailAgentic</div>}
+        <div className="brand">
+          <span className="brand-mark" aria-hidden="true">
+            <SendMark />
+          </span>
+          {!collapsed && (
+            <span className="brand-text">
+              <span className="brand-name">ColdEmailAgentic</span>
+              <span className="brand-sub">Macos Suite</span>
+            </span>
+          )}
+        </div>
         <button
           type="button"
           className="collapse-btn"
@@ -137,14 +188,14 @@ export function Sidebar({
             onClick={() => onNavigate(item.id)}
           >
             <NavIcon name={item.id} />
-            {!collapsed && item.label}
+            {!collapsed && <span className="nav-label">{item.label}</span>}
           </button>
         ))}
       </nav>
 
       {!collapsed && (
         <div className="activity">
-          <div className="activity-head">Activity</div>
+          <div className="activity-head">Recent activity</div>
           {activity.length === 0 ? (
             <p className="activity-empty">Drafts and sends will show up here.</p>
           ) : (
@@ -169,15 +220,54 @@ export function Sidebar({
       )}
 
       {!collapsed && (
-        <div className="sidebar-foot">
-          <span className="account-email" title={account?.email ?? 'Not connected'}>
-            {account?.email ?? 'Not connected'}
-          </span>
-          <button type="button" className="chip ghost" disabled={busy !== null} onClick={onConnect}>
+        <div className="sidebar-foot identity-card">
+          <div className="identity-head">
+            <span className="identity-label">Active Identity</span>
+            <span className={account ? 'status-pill connected' : 'status-pill'}>
+              <span className="status-dot" aria-hidden="true" />
+              {account ? 'Active' : 'Offline'}
+            </span>
+          </div>
+          <div className="identity-row">
+            <span className="avatar avatar-sm" aria-hidden="true">
+              {initials(identity)}
+            </span>
+            <span className="identity-main">
+              <span className="account-email" title={identity}>
+                {identity}
+              </span>
+              <span className="identity-sub">{account ? 'Gmail account' : 'Connect to get started'}</span>
+            </span>
+          </div>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm identity-connect"
+            disabled={busy !== null}
+            onClick={onConnect}
+          >
             {account ? 'Refresh' : 'Connect'}
           </button>
         </div>
       )}
+
+      <div className="sidebar-settings">
+        <button
+          type="button"
+          className={view === 'settings' ? 'nav-item active' : 'nav-item'}
+          aria-current={view === 'settings' ? 'page' : undefined}
+          aria-label="Settings"
+          title={collapsed ? 'Settings' : undefined}
+          onClick={() => onNavigate('settings')}
+        >
+          <NavIcon name="settings" />
+          {!collapsed && (
+            <>
+              <span className="nav-label">Settings</span>
+              <ChevronRight />
+            </>
+          )}
+        </button>
+      </div>
     </aside>
   )
 }

@@ -10,13 +10,35 @@ export interface NewEmailInput {
 export interface ThreadPage {
   threads: Thread[];
   nextPageToken: string | null;
+  overflowed?: boolean;
+}
+
+export interface ThreadQueryOptions {
+  pageToken?: string;
+  /** Present → outreach mode. Empty array means "no cold recipients yet". */
+  outreachRecipients?: string[];
+  /** Thread IDs we started (sends.thread_id); matched directly so alias/older replies are visible. */
+  knownThreadIds?: string[];
+  trashed?: boolean;
+}
+
+export function mergeThreadPages(existing: Thread[], incoming: Thread[]): Thread[] {
+  const seen = new Set(existing.map((t) => t.id));
+  return [...existing, ...incoming.filter((t) => !seen.has(t.id))];
+}
+
+export interface SentNewEmail {
+  message: Message;
+  threadId: string;
 }
 
 export interface MailboxProvider {
-  connect(): Promise<Account>;
+  connect(force?: boolean): Promise<Account>;
   isConnected(): boolean;
-  listThreads(opts?: { pageToken?: string }): Promise<ThreadPage>;
+  listThreads(opts?: ThreadQueryOptions): Promise<ThreadPage>;
   getThread(id: string): Promise<Thread | null>;
   send(threadId: string, body: string): Promise<Message>;
-  sendNew(input: NewEmailInput): Promise<Message>;
+  sendNew(input: NewEmailInput): Promise<SentNewEmail>;
+  trashThread(id: string): Promise<void>;
+  untrashThread(id: string): Promise<void>;
 }
