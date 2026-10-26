@@ -357,3 +357,30 @@ describe('GmailMailboxAdapter', () => {
     expect(calls).toBe(0);
   });
 });
+
+describe('GmailMailboxAdapter known-thread pagination', () => {
+  it('does not re-merge known threads on later pages', async () => {
+    const knownThread: Thread = { ...thread, id: 't9' };
+    const getThreadsByIds = vi.fn(async () => [knownThread]);
+    const { provider } = fakeProvider({
+      listThreads: async () => ({ threads: [thread], nextPageToken: 'next' }),
+      getThreadsByIds,
+    });
+    const adapter = new GmailMailboxAdapter(() => provider);
+    await adapter.connect();
+
+    const first = await adapter.listThreads({
+      outreachRecipients: ['sarah@acme.com'],
+      knownThreadIds: ['t9'],
+    });
+    expect(first.threads.map((t) => t.id).sort()).toEqual(['t1', 't9']);
+
+    const second = await adapter.listThreads({
+      outreachRecipients: ['sarah@acme.com'],
+      knownThreadIds: ['t9'],
+      pageToken: 'next',
+    });
+    expect(getThreadsByIds).toHaveBeenCalledTimes(1);
+    expect(second.threads.map((t) => t.id)).toEqual(['t1']);
+  });
+});

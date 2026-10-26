@@ -93,7 +93,7 @@ export class GmailMailboxAdapter implements MailboxProvider {
         page = await provider.listThreads({ ...args, pageToken: page.nextPageToken });
         threads = clean(page.threads);
       }
-      const merged = await mergeKnown(threads, provider, known);
+      const merged = opts?.pageToken ? threads : await mergeKnown(threads, provider, known);
       return { threads: merged, nextPageToken: page.nextPageToken ?? null };
     }
 
@@ -113,7 +113,9 @@ export class GmailMailboxAdapter implements MailboxProvider {
       }
     }
     merged.sort((a, b) => b.lastMessageAt - a.lastMessageAt);
-    const finalThreads = await mergeKnown(merged.slice(0, OUTREACH_CAP), provider, known);
+    const finalThreads = opts?.pageToken
+      ? merged.slice(0, OUTREACH_CAP)
+      : await mergeKnown(merged.slice(0, OUTREACH_CAP), provider, known);
     return { threads: finalThreads, nextPageToken: null, overflowed: true };
   }
 
