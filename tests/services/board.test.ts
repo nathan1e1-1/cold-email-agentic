@@ -46,4 +46,31 @@ describe('loadBoard', () => {
     expect(board.threads.map((t) => t.id)).toEqual(['thr1']);
     expect(board.cards).toEqual([card1]);
   });
+
+  it('includes known sent threads even when the inbound sender is an alias', async () => {
+    const repo = new NodeRepository(':memory:');
+    const account = await repo.upsertAccount({
+      provider: 'gmail', email: 'me@x.com', ownEmail: 'me@x.com', tokenRef: 't', createdAt: 1,
+    });
+    await repo.recordSend(1, 'cold', 'primary@z.com', 'thr-known');
+
+    const known = await repo.upsertThread({
+      id: 'thr-known', accountId: account.rowId, subject: '', participants: [{ email: 'alias@z.com' }],
+      labels: [], messages: [], lastMessageAt: 1, snippet: '', inInbox: true,
+    });
+    await repo.upsertMessage(known.rowId, msg('alias@z.com', 'inbound'));
+    const knownCard = await repo.createCard(known.rowId, 'untouched', 1);
+
+    const unknown = await repo.upsertThread({
+      id: 'thr-known-2', accountId: account.rowId, subject: '', participants: [{ email: 'alias2@z.com' }],
+      labels: [], messages: [], lastMessageAt: 2, snippet: '', inInbox: true,
+    });
+    await repo.upsertMessage(unknown.rowId, msg('alias2@z.com', 'inbound'));
+    await repo.createCard(unknown.rowId, 'untouched', 2);
+
+    const board = await loadBoard(repo);
+
+    expect(board.threads.map((t) => t.id)).toEqual(['thr-known']);
+    expect(board.cards.map((c) => c.id)).toEqual([knownCard.id]);
+  });
 });

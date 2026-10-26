@@ -419,7 +419,7 @@ function App() {
     try {
       const page = await fetchTrash(trashToken)
       if (!page) return
-      setTrashThreads((prev) => [...prev, ...page.threads])
+      setTrashThreads((prev) => mergeThreadPages(prev, page.threads))
       setTrashToken(page.nextPageToken)
       setTrashOverflowed(page.overflowed ?? false)
     } catch (err) {

@@ -12,7 +12,7 @@ describe('ErrorBoundary', () => {
   it('renders a fallback instead of a blank screen', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     render(<ErrorBoundary><Boom /></ErrorBoundary>);
-    expect(screen.getByRole('alert').textContent).toContain('boom');
+    expect(screen.getByRole('alert')).toHaveTextContent('boom');
   });
 
   it('delivers global errors to subscribers', () => {
