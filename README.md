@@ -49,6 +49,25 @@ npm run lint
 
 The same checks run in CI on every pull request (`.github/workflows/ci.yml`).
 
+## Known limitations
+
+- The Inbox is **cold outreach + replies only**; there is no All-mail view, by design. See
+  [Inbox simplification](docs/specs/2026-10-24-inbox-simplification.md).
+- The `from:` query covers cold recipients from the **last 30 days**. Replies to **known
+  cold threads** are additionally matched directly, which works for sends recorded with a
+  Gmail thread id.
+- Cold emails sent **from Gmail web** (not the app) have no local `sends` row and cannot be
+  matched by either Inbox path. Sends recorded before the `thread_id` migration cannot be
+  matched by the known-thread path; recent recipients may still be caught by the 30-day
+  `from:` query.
+- Auto-refresh runs while the window is visible (about every 60 seconds). Focus and
+  visibility changes trigger the same throttled check. Background or hidden windows do not
+  poll.
+- AI drafting sends the thread and prompt content to the configured provider
+  (Gemini or Groq).
+- The app is local and single-user. There is no backend, multi-user auth, or app-level
+  remote sync.
+
 ## License
 
 Personal project; no license file included.
