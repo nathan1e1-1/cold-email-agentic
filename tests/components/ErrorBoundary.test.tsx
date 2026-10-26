@@ -20,6 +20,7 @@ describe('ErrorBoundary', () => {
     const off = onGlobalError((m) => seen.push(m));
     emitGlobalError('kaboom');
     off();
+    emitGlobalError('after-off');
     expect(seen).toEqual(['kaboom']);
   });
 });

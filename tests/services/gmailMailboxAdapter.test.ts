@@ -415,3 +415,34 @@ describe('GmailMailboxAdapter known-thread edge cases', () => {
     expect(page.threads.map((t) => t.id)).toEqual(['t1']);
   });
 });
+
+describe('GmailMailboxAdapter known-thread cache', () => {
+  const alias: Thread = { ...thread, id: 't9' };
+
+  it('does not refetch known threads within the TTL', async () => {
+    const getThreadsByIds = vi.fn(async () => [alias]);
+    const { provider } = fakeProvider({ getThreadsByIds });
+    const adapter = new GmailMailboxAdapter(() => provider);
+    await adapter.connect();
+
+    const opts = { outreachRecipients: ['sarah@acme.com'], knownThreadIds: ['t9'] };
+    await adapter.listThreads(opts);
+    await adapter.listThreads(opts);
+    expect(getThreadsByIds).toHaveBeenCalledTimes(1);
+  });
+
+  it('refetches after the TTL', async () => {
+    const getThreadsByIds = vi.fn(async () => [alias]);
+    const { provider } = fakeProvider({ getThreadsByIds });
+    const adapter = new GmailMailboxAdapter(() => provider);
+    await adapter.connect();
+
+    const spy = vi.spyOn(Date, 'now').mockReturnValue(1_000_000);
+    const opts = { outreachRecipients: ['sarah@acme.com'], knownThreadIds: ['t9'] };
+    await adapter.listThreads(opts);
+    spy.mockReturnValue(1_000_000 + 3 * 60_000);
+    await adapter.listThreads(opts);
+    expect(getThreadsByIds).toHaveBeenCalledTimes(2);
+    spy.mockRestore();
+  });
+});

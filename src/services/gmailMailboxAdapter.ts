@@ -11,13 +11,7 @@ import { isJunkThread } from '../mail/junk';
 
 export type MailProviderFactory = (ownEmail: string) => MailProvider;
 
-async function mergeKnown(
-  current: Thread[],
-  provider: MailProvider,
-  known: string[],
-): Promise<Thread[]> {
-  if (known.length === 0) return current;
-  const extra = await provider.getThreadsByIds(known);
+function mergeKnown(current: Thread[], extra: Thread[]): Thread[] {
   const keep = extra.filter(
     (t) =>
       !isJunkThread(t) &&
@@ -31,10 +25,15 @@ async function mergeKnown(
     .slice(0, OUTREACH_CAP);
 }
 
+const KNOWN_TTL_MS = 2 * 60_000;
+
 export class GmailMailboxAdapter implements MailboxProvider {
   private createProvider: MailProviderFactory;
   private provider: MailProvider | null = null;
   private account: Account | null = null;
+  // Cached known-thread lookups so the 60s inbox poll doesn't re-fetch every
+  // cold thread id on every tick (bounded Gmail quota use).
+  private knownCache = new Map<string, { thread: Thread | null; at: number }>();
 
   constructor(createProvider: MailProviderFactory) {
     this.createProvider = createProvider;
@@ -63,6 +62,25 @@ export class GmailMailboxAdapter implements MailboxProvider {
     return this.provider;
   }
 
+  private async fetchKnown(provider: MailProvider, known: string[]): Promise<Thread[]> {
+    if (known.length === 0) return [];
+    const now = Date.now();
+    const stale = known.filter((id) => {
+      const hit = this.knownCache.get(id);
+      return !hit || now - hit.at > KNOWN_TTL_MS;
+    });
+    if (stale.length > 0) {
+      const fetched = await provider.getThreadsByIds(stale);
+      for (const id of stale) {
+        const thread = fetched.find((t) => t.id === id) ?? null;
+        this.knownCache.set(id, { thread, at: now });
+      }
+    }
+    return known
+      .map((id) => this.knownCache.get(id)?.thread ?? null)
+      .filter((t): t is Thread => t !== null);
+  }
+
   async listThreads(opts?: ThreadQueryOptions): Promise<ThreadPage> {
     const provider = this.requireProvider();
     const recipients = opts?.outreachRecipients;
@@ -86,7 +104,7 @@ export class GmailMailboxAdapter implements MailboxProvider {
     if (!query) {
       // No recent recipients -> the from: query is empty, but known cold threads
       // can still have replies (older sends / aliases). Fetch those directly.
-      const threads = opts?.pageToken ? [] : await mergeKnown([], provider, known);
+      const threads = opts?.pageToken ? [] : mergeKnown([], await this.fetchKnown(provider, known));
       return { threads, nextPageToken: null };
     }
 
@@ -102,7 +120,7 @@ export class GmailMailboxAdapter implements MailboxProvider {
         page = await provider.listThreads({ ...args, pageToken: page.nextPageToken });
         threads = clean(page.threads);
       }
-      const merged = opts?.pageToken ? threads : await mergeKnown(threads, provider, known);
+      const merged = opts?.pageToken ? threads : mergeKnown(threads, await this.fetchKnown(provider, known));
       return { threads: merged, nextPageToken: page.nextPageToken ?? null };
     }
 
@@ -124,7 +142,7 @@ export class GmailMailboxAdapter implements MailboxProvider {
     merged.sort((a, b) => b.lastMessageAt - a.lastMessageAt);
     const finalThreads = opts?.pageToken
       ? merged.slice(0, OUTREACH_CAP)
-      : await mergeKnown(merged.slice(0, OUTREACH_CAP), provider, known);
+      : mergeKnown(merged.slice(0, OUTREACH_CAP), await this.fetchKnown(provider, known));
     return { threads: finalThreads, nextPageToken: null, overflowed: true };
   }
 
