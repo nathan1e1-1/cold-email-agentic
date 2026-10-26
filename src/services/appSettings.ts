@@ -3,6 +3,10 @@ export interface StoredSettings {
   redirectUri: string;
   aiProvider: 'gemini' | 'groq';
   signature: string;
+  mailProvider: 'gmail' | 'outlook';
+  outlookClientId: string;
+  outlookTenant: string;
+  outlookRedirectUri: string;
 }
 
 export const SECRET_KEYS = {
@@ -18,7 +22,19 @@ const DEFAULTS: StoredSettings = {
   redirectUri: 'http://127.0.0.1:8765',
   aiProvider: 'groq',
   signature: '',
+  mailProvider: 'gmail',
+  outlookClientId: '',
+  outlookTenant: 'common',
+  outlookRedirectUri: 'http://localhost:8766',
 };
+
+export function hasStoredSettings(): boolean {
+  try {
+    return localStorage.getItem(STORAGE_KEY) !== null;
+  } catch {
+    return false;
+  }
+}
 
 export function loadSettings(): StoredSettings {
   try {

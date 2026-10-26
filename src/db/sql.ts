@@ -87,7 +87,7 @@ export const SQL_LIST_COLD_RECIPIENTS =
     GROUP BY lower(to_email)
     ORDER BY last_sent_at DESC`;
 export const SQL_LIST_COLD_THREAD_IDS =
-  "SELECT thread_id, lower(to_email) AS to_email FROM sends WHERE kind='cold' AND thread_id IS NOT NULL";
+  "SELECT thread_id, lower(to_email) AS to_email FROM sends WHERE kind='cold' AND thread_id IS NOT NULL AND thread_id <> ''";
 export const SQL_COUNT_SENDS_SINCE = 'SELECT COUNT(*) AS n FROM sends WHERE kind=? AND sent_at>=?';
 export const SQL_HAS_COLD_SEND_TO =
   "SELECT COUNT(*) AS n FROM sends WHERE kind='cold' AND to_email=?";

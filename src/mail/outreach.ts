@@ -43,7 +43,7 @@ export function excludeOwnEmail(emails: string[], ownEmail: string | null | unde
   return emails.filter((email) => normalizeEmail(email) !== own);
 }
 
-function uniqueRecipients(emails: string[]): string[] {
+export function uniqueRecipients(emails: string[]): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
   for (const raw of emails) {

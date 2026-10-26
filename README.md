@@ -11,14 +11,19 @@ agent that drafts the emails.
 - **Guardrails** — sends honor opt-outs and are rate-limited (25/day, 3/min).
 - **Private & local** — email data lives in local SQLite; OAuth tokens and API keys live in
   a local `0600` file; no backend server.
+- **Gmail or Outlook / Microsoft 365** — connect Gmail via the Gmail API, or Outlook mail via
+  Microsoft Graph. Switch providers in Settings.
 
 ## Requirements
 
 - macOS (Apple Silicon), Node 20+, and the Rust toolchain (`rustup`).
-- A Google Cloud **OAuth Desktop client** (Gmail API enabled).
+- A Google Cloud **OAuth Desktop client** (Gmail API enabled) **or** a Microsoft Entra ID
+  app registration for Outlook. For a single-tenant registration, use its Directory (tenant)
+  ID or domain (not `common`).
 - A free **Groq** key (default) and/or **Gemini** key for drafting.
 
-Full click-by-click setup: **[docs/setup.md](docs/setup.md)**.
+Full click-by-click setup: **[docs/setup.md](docs/setup.md)** (Gmail) and
+**[docs/setup-outlook.md](docs/setup-outlook.md)** (Outlook / Microsoft 365).
 
 ## Develop
 
@@ -27,8 +32,9 @@ npm install
 npm run tauri dev
 ```
 
-Then open **Settings** in the app's sidebar and paste your Google Client ID / secret and AI
-key (or copy `.env.example` → `.env`).
+Then open **Settings** in the app's sidebar, choose **Gmail** or **Outlook / Microsoft 365**
+under **Mail account**, and paste the matching credentials plus your AI key (or copy
+`.env.example` → `.env`).
 
 ## Build
 
@@ -57,7 +63,8 @@ The same checks run in CI on every pull request (`.github/workflows/ci.yml`).
   [Inbox simplification](docs/specs/2026-10-24-inbox-simplification.md).
 - The `from:` query covers cold recipients from the **last 30 days**. Replies to **known
   cold threads** are additionally matched directly, which works for sends recorded with a
-  Gmail thread id.
+  Gmail thread id. Outlook cold sends do not record a `thread_id` yet, so this known-thread
+  enhancement is Gmail-only for now.
 - Cold emails sent **from Gmail web** (not the app) have no local `sends` row and cannot be
   matched by either Inbox path. Sends recorded before the `thread_id` migration cannot be
   matched by the known-thread path; recent recipients may still be caught by the 30-day

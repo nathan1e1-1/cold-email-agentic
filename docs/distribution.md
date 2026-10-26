@@ -6,8 +6,9 @@ checklist for turning that into a signed app that other people can install.
 
 ## 1. Audience assumptions now
 
-- The README describes a **single-user/local install**: one Gmail account, one local
-  SQLite database, no account system, no backend server, and no multi-user auth.
+- The README describes a **single-user/local install**: one mail account (Gmail or
+  Microsoft 365 Outlook), one local SQLite database, no account system, no backend server,
+  and no multi-user auth.
 - The user supplies their own Google OAuth desktop client and AI keys today. A public
   release would move to an app-owned OAuth client and needs its own consent screen.
 - Distribution is a **separate milestone**. It changes the OAuth review path, secret

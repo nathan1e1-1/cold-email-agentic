@@ -92,7 +92,7 @@ export function DashboardView({
         <div className="page-head-main">
           <h1 className="view-title">Outreach overview</h1>
           <p className="view-sub">
-            {account ? `Connected as ${account.email}` : 'Connect Gmail to load your inbox.'}
+            {account ? `Connected as ${account.email}` : 'Connect a mail account to load your inbox.'}
           </p>
         </div>
         <span className={aiLabel ? 'pill info' : 'pill'}>
@@ -117,7 +117,7 @@ export function DashboardView({
           <span className="stat-icon"><SendIcon /></span>
           <span className="stat-label">Sent this session</span>
           <span className="stat-num">{sentThisSession}</span>
-          <span className="stat-sub">Replies sent from Gmail</span>
+          <span className="stat-sub">Replies sent from your mailbox</span>
         </article>
         <article className="stat">
           <span className="stat-icon"><SparkIcon /></span>

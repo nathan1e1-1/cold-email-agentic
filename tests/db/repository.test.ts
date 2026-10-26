@@ -289,6 +289,7 @@ describe('NodeRepository', () => {
     await repo.recordSend(2, 'cold', 'a@x.com', 't1');
     await repo.recordSend(3, 'cold', 'b@x.com', 't2');
     await repo.recordSend(4, 'reply', 'c@x.com', 't3');
+    await repo.recordSend(5, 'cold', 'blank@x.com', '');
     expect((await repo.listColdThreadIds()).sort()).toEqual(['t1', 't2']);
   });
 
