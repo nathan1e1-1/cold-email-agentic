@@ -1,13 +1,9 @@
 import Database from '@tauri-apps/plugin-sql';
 import { MIGRATIONS } from './schema';
 import type { Repository, RepoAccount, RepoThread } from './repository';
-import type { Account, Address, Card, CardStatus, ColdRecipient, Contact, Draft, Message, SendKind, Thread } from '../domain/types';
-
-const bool = (n: number | null | undefined) => n === 1;
-const toBool = (b: boolean) => (b ? 1 : 0);
-const j = (v: unknown) => JSON.stringify(v ?? null);
-const pj = <T,>(s: string | null, fallback: T): T => (s ? (JSON.parse(s) as T) : fallback);
-const normEmail = (email: string) => email.trim().toLowerCase();
+import type { Account, Card, CardStatus, ColdRecipient, Contact, Draft, Message, SendKind, Thread } from '../domain/types';
+import { j, mapAccount, mapCard, mapContact, mapDraft, mapMessage, mapThread, normEmail, toBool } from './mappers';
+import * as SQL from './sql';
 
 export const DB_PATH = 'sqlite:coldemailagentic.db';
 
@@ -50,110 +46,96 @@ export class TauriRepository implements Repository {
   }
 
   async upsertAccount(a: Account & { tokenRef: string; createdAt: number }): Promise<RepoAccount> {
-    const existing = await this.one<{ id: number }>('SELECT id FROM accounts ORDER BY id ASC LIMIT 1');
+    const existing = await this.one<{ id: number }>(SQL.SQL_FIND_ACCOUNT_ID);
     if (existing) {
       await this.db.execute(
-        'UPDATE accounts SET provider=?,email=?,own_email=?,display_name=?,token_ref=? WHERE id=?',
+        SQL.SQL_UPDATE_ACCOUNT,
         [a.provider, a.email, a.ownEmail, a.displayName ?? null, a.tokenRef, existing.id],
       );
-      return this.mapAccount((await this.one<any>('SELECT * FROM accounts WHERE id=?', [existing.id]))!);
+      return mapAccount((await this.one<any>(SQL.SQL_SELECT_ACCOUNT_BY_ID, [existing.id]))!);
     }
     const res = await this.db.execute(
-      `INSERT INTO accounts (provider,email,own_email,display_name,token_ref,history_id,created_at)
-       VALUES (?,?,?,?,?,NULL,?)`,
+      SQL.SQL_INSERT_ACCOUNT,
       [a.provider, a.email, a.ownEmail, a.displayName ?? null, a.tokenRef, a.createdAt],
     );
-    return this.mapAccount((await this.one<any>('SELECT * FROM accounts WHERE id=?', [res.lastInsertId ?? 0]))!);
+    return mapAccount((await this.one<any>(SQL.SQL_SELECT_ACCOUNT_BY_ID, [res.lastInsertId ?? 0]))!);
   }
 
   async getAccount(): Promise<RepoAccount | null> {
-    const row = await this.one<any>('SELECT * FROM accounts ORDER BY id ASC LIMIT 1');
-    return row ? this.mapAccount(row) : null;
+    const row = await this.one<any>(SQL.SQL_SELECT_FIRST_ACCOUNT);
+    return row ? mapAccount(row) : null;
   }
 
   async upsertThread(t: Thread & { accountId: number }): Promise<RepoThread> {
     await this.db.execute(
-      `INSERT INTO threads (account_id,provider_thread_id,subject,participants_json,labels_json,
-         last_message_at,snippet,in_inbox)
-       VALUES (?,?,?,?,?,?,?,?)
-       ON CONFLICT(provider_thread_id) DO UPDATE SET subject=excluded.subject,
-         participants_json=excluded.participants_json,labels_json=excluded.labels_json,
-         last_message_at=excluded.last_message_at,snippet=excluded.snippet,
-         in_inbox=excluded.in_inbox`,
+      SQL.SQL_UPSERT_THREAD,
       [t.accountId, t.id, t.subject, j(t.participants), j(t.labels), t.lastMessageAt, t.snippet, toBool(t.inInbox)],
     );
     return (await this.getThreadByProviderId(t.id))!;
   }
 
   async getThreadByProviderId(id: string): Promise<RepoThread | null> {
-    const row = await this.one<any>('SELECT * FROM threads WHERE provider_thread_id=?', [id]);
-    return row ? this.mapThread(row) : null;
+    const row = await this.one<any>(SQL.SQL_SELECT_THREAD_BY_PROVIDER_ID, [id]);
+    return row ? mapThread(row) : null;
   }
 
   async listThreads(): Promise<RepoThread[]> {
-    return (await this.all<any>('SELECT * FROM threads ORDER BY last_message_at DESC')).map((r) => this.mapThread(r));
+    return (await this.all<any>(SQL.SQL_LIST_THREADS)).map((r) => mapThread(r));
   }
 
   async deleteMessages(providerMessageIds: string[]): Promise<void> {
     for (const id of providerMessageIds) {
-      await this.db.execute('DELETE FROM messages WHERE provider_message_id=?', [id]);
+      await this.db.execute(SQL.SQL_DELETE_MESSAGE, [id]);
     }
   }
 
   async deleteThreadByProviderId(providerThreadId: string): Promise<void> {
     await this.transaction(async () => {
-      const row = await this.one<{ id: number }>('SELECT id FROM threads WHERE provider_thread_id=?', [providerThreadId]);
+      const row = await this.one<{ id: number }>(SQL.SQL_FIND_THREAD_ID, [providerThreadId]);
       if (!row) return;
-      await this.db.execute('DELETE FROM drafts WHERE card_id IN (SELECT id FROM cards WHERE thread_id=?)', [row.id]);
-      await this.db.execute('DELETE FROM cards WHERE thread_id=?', [row.id]);
-      await this.db.execute('DELETE FROM messages WHERE thread_id=?', [row.id]);
-      await this.db.execute('DELETE FROM threads WHERE id=?', [row.id]);
+      await this.db.execute(SQL.SQL_DELETE_DRAFTS_BY_THREAD, [row.id]);
+      await this.db.execute(SQL.SQL_DELETE_CARDS_BY_THREAD, [row.id]);
+      await this.db.execute(SQL.SQL_DELETE_MESSAGES_BY_THREAD, [row.id]);
+      await this.db.execute(SQL.SQL_DELETE_THREAD_BY_ROW_ID, [row.id]);
     });
   }
 
   async upsertMessage(threadRowId: number, m: Message): Promise<void> {
     await this.db.execute(
-      `INSERT INTO messages (thread_id,provider_message_id,rfc_message_id,references_json,
-         from_json,to_json,cc_json,subject,body_text,body_html,has_list_unsubscribe,date,direction)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
-       ON CONFLICT(provider_message_id) DO UPDATE SET rfc_message_id=excluded.rfc_message_id,
-         references_json=excluded.references_json,from_json=excluded.from_json,to_json=excluded.to_json,
-         cc_json=excluded.cc_json,subject=excluded.subject,body_text=excluded.body_text,
-         body_html=excluded.body_html,has_list_unsubscribe=excluded.has_list_unsubscribe,
-         date=excluded.date,direction=excluded.direction`,
+      SQL.SQL_UPSERT_MESSAGE,
       [threadRowId, m.id, m.rfcMessageId, j(m.references), j(m.from), j(m.to), j(m.cc), m.subject,
         m.bodyText, m.bodyHtml ?? null, toBool(m.hasListUnsubscribe), m.date, m.direction],
     );
   }
 
   async listMessages(threadRowId: number): Promise<Message[]> {
-    return (await this.all<any>('SELECT * FROM messages WHERE thread_id=? ORDER BY date ASC, id ASC', [threadRowId]))
-      .map((r) => this.mapMessage(r));
+    return (await this.all<any>(SQL.SQL_LIST_MESSAGES, [threadRowId]))
+      .map((r) => mapMessage(r));
   }
 
   async createCard(threadRowId: number, status: CardStatus, now: number): Promise<Card> {
     const existing = await this.getCardByThread(threadRowId);
     if (existing) return existing;
-    await this.db.execute('UPDATE cards SET position = position + 1 WHERE status = ?', [status]);
+    await this.db.execute(SQL.SQL_SHIFT_CARDS_FOR_INSERT, [status]);
     const res = await this.db.execute(
-      'INSERT INTO cards (thread_id,status,position,updated_at) VALUES (?,?,0,?)',
+      SQL.SQL_INSERT_CARD,
       [threadRowId, status, now],
     );
-    return this.mapCard((await this.one<any>('SELECT * FROM cards WHERE id=?', [res.lastInsertId ?? 0]))!);
+    return mapCard((await this.one<any>(SQL.SQL_SELECT_CARD_BY_ID, [res.lastInsertId ?? 0]))!);
   }
 
   async getCardByThread(threadRowId: number): Promise<Card | null> {
-    const row = await this.one<any>('SELECT * FROM cards WHERE thread_id=?', [threadRowId]);
-    return row ? this.mapCard(row) : null;
+    const row = await this.one<any>(SQL.SQL_SELECT_CARD_BY_THREAD, [threadRowId]);
+    return row ? mapCard(row) : null;
   }
 
   async listCards(): Promise<Card[]> {
-    return (await this.all<any>('SELECT * FROM cards ORDER BY status, position, id')).map((r) => this.mapCard(r));
+    return (await this.all<any>(SQL.SQL_LIST_CARDS)).map((r) => mapCard(r));
   }
 
   async moveCard(cardId: number, status: CardStatus, index: number, now: number): Promise<void> {
     const card = await this.one<{ status: CardStatus; position: number }>(
-      'SELECT status, position FROM cards WHERE id=?', [cardId],
+      SQL.SQL_SELECT_CARD_POSITION, [cardId],
     );
     if (!card) throw new Error(`Card not found: ${cardId}`);
     const from = card.status;
@@ -162,141 +144,107 @@ export class TauriRepository implements Repository {
 
     if (from === status) {
       if (to === fromPos) {
-        await this.db.execute('UPDATE cards SET updated_at=? WHERE id=?', [now, cardId]);
+        await this.db.execute(SQL.SQL_TOUCH_CARD, [now, cardId]);
         return;
       }
       if (to < fromPos) {
         await this.db.execute(
-          'UPDATE cards SET position = position + 1 WHERE status=? AND position >= ? AND position < ?',
+          SQL.SQL_SHIFT_CARDS_UP_RANGE,
           [status, to, fromPos],
         );
       } else {
         await this.db.execute(
-          'UPDATE cards SET position = position - 1 WHERE status=? AND position > ? AND position <= ?',
+          SQL.SQL_SHIFT_CARDS_DOWN_RANGE,
           [status, fromPos, to],
         );
       }
-      await this.db.execute('UPDATE cards SET position=?, updated_at=? WHERE id=?', [to, now, cardId]);
+      await this.db.execute(SQL.SQL_SET_CARD_POSITION, [to, now, cardId]);
     } else {
-      await this.db.execute('UPDATE cards SET position = position - 1 WHERE status=? AND position > ?', [from, fromPos]);
-      await this.db.execute('UPDATE cards SET position = position + 1 WHERE status=? AND position >= ?', [status, to]);
-      await this.db.execute('UPDATE cards SET status=?, position=?, updated_at=? WHERE id=?', [status, to, now, cardId]);
+      await this.db.execute(SQL.SQL_CLOSE_CARD_GAP, [from, fromPos]);
+      await this.db.execute(SQL.SQL_OPEN_CARD_GAP, [status, to]);
+      await this.db.execute(SQL.SQL_MOVE_CARD_STATUS, [status, to, now, cardId]);
     }
   }
 
   async upsertContact(c: Omit<Contact, 'id'>): Promise<Contact> {
     const email = normEmail(c.email);
     await this.db.execute(
-      `INSERT INTO contacts (name,email,notes,do_not_contact,created_at) VALUES (?,?,?,?,?)
-       ON CONFLICT(email) DO UPDATE SET name=excluded.name, notes=excluded.notes`,
+      SQL.SQL_UPSERT_CONTACT,
       [c.name, email, c.notes ?? '', toBool(c.doNotContact), Date.now()],
     );
     return (await this.getContactByEmail(email))!;
   }
 
   async getContactByEmail(email: string): Promise<Contact | null> {
-    const row = await this.one<any>('SELECT * FROM contacts WHERE email=?', [normEmail(email)]);
-    return row ? this.mapContact(row) : null;
+    const row = await this.one<any>(SQL.SQL_SELECT_CONTACT_BY_EMAIL, [normEmail(email)]);
+    return row ? mapContact(row) : null;
   }
 
   async listContacts(): Promise<Contact[]> {
-    return (await this.all<any>('SELECT * FROM contacts ORDER BY created_at DESC, id DESC')).map((r) => this.mapContact(r));
+    return (await this.all<any>(SQL.SQL_LIST_CONTACTS)).map((r) => mapContact(r));
   }
 
   async setDoNotContact(email: string, value: boolean): Promise<void> {
-    await this.db.execute('UPDATE contacts SET do_not_contact=? WHERE email=?', [toBool(value), normEmail(email)]);
+    await this.db.execute(SQL.SQL_SET_DO_NOT_CONTACT, [toBool(value), normEmail(email)]);
   }
 
   async createDraft(d: Omit<Draft, 'id' | 'isChosen'>): Promise<Draft> {
     const res = await this.db.execute(
-      `INSERT INTO drafts (card_id,contact_id,body,model,tone,instruction,is_chosen,created_at)
-       VALUES (?,?,?,?,?,?,0,?)`,
+      SQL.SQL_INSERT_DRAFT,
       [d.cardId, d.contactId, d.body, d.model, d.tone, d.instruction, d.createdAt],
     );
-    return this.mapDraft((await this.one<any>('SELECT * FROM drafts WHERE id=?', [res.lastInsertId ?? 0]))!);
+    return mapDraft((await this.one<any>(SQL.SQL_SELECT_DRAFT_BY_ID, [res.lastInsertId ?? 0]))!);
   }
 
   async listDrafts(cardId: number): Promise<Draft[]> {
-    return (await this.all<any>('SELECT * FROM drafts WHERE card_id=? ORDER BY created_at DESC, id DESC', [cardId]))
-      .map((r) => this.mapDraft(r));
+    return (await this.all<any>(SQL.SQL_LIST_DRAFTS, [cardId]))
+      .map((r) => mapDraft(r));
   }
 
   async chooseDraft(draftId: number, cardId: number): Promise<void> {
-    await this.db.execute('UPDATE drafts SET is_chosen = CASE WHEN id=? THEN 1 ELSE 0 END WHERE card_id=?', [draftId, cardId]);
+    await this.db.execute(SQL.SQL_CHOOSE_DRAFT, [draftId, cardId]);
   }
 
   async recordSend(sentAt: number, kind: SendKind, toEmail: string, threadId?: string): Promise<void> {
     await this.db.execute(
-      'INSERT INTO sends (sent_at,kind,to_email,thread_id) VALUES (?,?,?,?)',
+      SQL.SQL_INSERT_SEND,
       [sentAt, kind, normEmail(toEmail), threadId ?? null],
     );
   }
 
   async listColdRecipients(): Promise<ColdRecipient[]> {
     const rows = await this.all<{ email: string; last_sent_at: number }>(
-      `SELECT lower(to_email) AS email, MAX(sent_at) AS last_sent_at
-         FROM sends WHERE kind='cold'
-        GROUP BY lower(to_email)
-        ORDER BY last_sent_at DESC`,
+      SQL.SQL_LIST_COLD_RECIPIENTS,
     );
     return rows.map((r) => ({ email: normEmail(r.email), lastSentAt: Number(r.last_sent_at) }));
   }
 
   async listColdThreadIds(): Promise<string[]> {
     const rows = await this.all<{ thread_id: string }>(
-      "SELECT DISTINCT thread_id FROM sends WHERE kind='cold' AND thread_id IS NOT NULL",
+      SQL.SQL_LIST_COLD_THREAD_IDS,
     );
     return rows.map((r) => r.thread_id);
   }
 
   async countSendsSince(sinceTs: number, kind: SendKind): Promise<number> {
-    const row = await this.one<{ n: number }>('SELECT COUNT(*) AS n FROM sends WHERE kind=? AND sent_at>=?', [kind, sinceTs]);
+    const row = await this.one<{ n: number }>(SQL.SQL_COUNT_SENDS_SINCE, [kind, sinceTs]);
     return Number(row?.n ?? 0);
   }
 
   async hasColdSendTo(email: string): Promise<boolean> {
-    const row = await this.one<{ n: number }>("SELECT COUNT(*) AS n FROM sends WHERE kind='cold' AND to_email=?", [normEmail(email)]);
+    const row = await this.one<{ n: number }>(SQL.SQL_HAS_COLD_SEND_TO, [normEmail(email)]);
     return Number(row?.n ?? 0) > 0;
   }
 
   async getSetting(key: string): Promise<string | null> {
-    const row = await this.one<{ value: string }>('SELECT value FROM settings WHERE key=?', [key]);
+    const row = await this.one<{ value: string }>(SQL.SQL_GET_SETTING, [key]);
     return row ? row.value : null;
   }
 
   async setSetting(key: string, value: string): Promise<void> {
     await this.db.execute(
-      `INSERT INTO settings (key,value) VALUES (?,?)
-       ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
+      SQL.SQL_UPSERT_SETTING,
       [key, value],
     );
-  }
-
-  private mapAccount(r: any): RepoAccount {
-    return { rowId: r.id, provider: r.provider, email: r.email, ownEmail: r.own_email,
-      displayName: r.display_name ?? undefined, tokenRef: r.token_ref,
-      createdAt: r.created_at };
-  }
-  private mapThread(r: any): RepoThread {
-    return { rowId: r.id, accountId: r.account_id, id: r.provider_thread_id, subject: r.subject,
-      participants: pj<Address[]>(r.participants_json, []), labels: pj<string[]>(r.labels_json, []),
-      messages: [], lastMessageAt: r.last_message_at, snippet: r.snippet, inInbox: bool(r.in_inbox) };
-  }
-  private mapMessage(r: any): Message {
-    return { id: r.provider_message_id, rfcMessageId: r.rfc_message_id,
-      references: pj<string[]>(r.references_json, []), from: pj<Address>(r.from_json, { email: '' }),
-      to: pj<Address[]>(r.to_json, []), cc: pj<Address[]>(r.cc_json, []), subject: r.subject,
-      bodyText: r.body_text, bodyHtml: r.body_html ?? undefined,
-      hasListUnsubscribe: bool(r.has_list_unsubscribe), date: r.date, direction: r.direction };
-  }
-  private mapCard(r: any): Card {
-    return { id: r.id, threadRowId: r.thread_id, status: r.status, position: r.position, updatedAt: r.updated_at };
-  }
-  private mapContact(r: any): Contact {
-    return { id: r.id, name: r.name, email: r.email, notes: r.notes, doNotContact: bool(r.do_not_contact) };
-  }
-  private mapDraft(r: any): Draft {
-    return { id: r.id, cardId: r.card_id, contactId: r.contact_id, body: r.body, model: r.model,
-      tone: r.tone, instruction: r.instruction, isChosen: bool(r.is_chosen), createdAt: r.created_at };
   }
 }
