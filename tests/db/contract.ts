@@ -381,6 +381,7 @@ export function runRepositoryContract(make: () => Repository): void {
         await repo.recordSend(4, 'reply', 'c@x.com', 't3');
         await repo.recordSend(5, 'cold', 'd@x.com');
         await repo.recordSend(6, 'cold', ' ME@X.com ', 't-self');
+        await repo.recordSend(7, 'cold', 'blank@x.com', '');
         expect((await repo.listColdThreadIds()).sort()).toEqual(['t-self', 't1', 't2']);
         expect((await repo.listColdThreadIds('me@x.com')).sort()).toEqual(['t1', 't2']);
       });

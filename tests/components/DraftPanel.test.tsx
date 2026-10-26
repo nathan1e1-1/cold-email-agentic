@@ -56,7 +56,7 @@ describe('DraftPanel', () => {
   it('shows the normal hint outside test mode', () => {
     renderPanel({ testMode: false });
     expect(screen.queryByRole('button', { name: 'Turn off Test mode' })).toBeNull();
-    expect(screen.getByText('Sends a real reply from your Gmail account.')).toBeInTheDocument();
+    expect(screen.getByText('Sends a real reply from your mail account.')).toBeInTheDocument();
   });
 
   it('stays disabled in test mode even when canSend', () => {

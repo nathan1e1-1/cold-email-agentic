@@ -134,7 +134,7 @@ export function DraftPanel({
                 </button>
               </div>
             ) : (
-              <span className="hint">Sends a real reply from your Gmail account.</span>
+              <span className="hint">Sends a real reply from your mail account.</span>
             )}
           </div>
         </>

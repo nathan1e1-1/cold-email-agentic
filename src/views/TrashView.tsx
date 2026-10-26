@@ -39,11 +39,11 @@ export function TrashView({ threads, busy, ready, loading, overflowed, hasMore, 
       <header className="page-head">
         <div className="page-head-main">
           <h1 className="view-title">Trash</h1>
-          <p className="view-sub">Deleted outreach threads. Restore one to put it back in the Inbox. Gmail permanently empties Trash after 30 days.</p>
+          <p className="view-sub">Deleted outreach threads. Restore one to put it back in the Inbox. Your mail provider permanently empties Trash after its retention period.</p>
         </div>
       </header>
       {!ready ? (
-        <p className="hint">Connect Gmail to view Trash.</p>
+        <p className="hint">Connect a mail account to view Trash.</p>
       ) : loading ? (
         <p className="hint">Loading…</p>
       ) : threads.length === 0 ? (

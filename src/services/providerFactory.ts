@@ -2,6 +2,8 @@ import type { AiProvider } from '../ai/aiProvider';
 import { GeminiProvider } from '../ai/geminiProvider';
 import { GroqProvider } from '../ai/groqProvider';
 import { GmailProvider } from '../mail/gmailProvider';
+import { MicrosoftGraphProvider } from '../mail/microsoftGraphProvider';
+import { createMicrosoftAuthenticator } from '../mail/microsoftOauth';
 import { OAuthAuthenticator } from '../mail/oauth';
 import { TauriHttpClient } from '../mail/tauriHttp';
 import { createTauriConsentRunner } from '../mail/tauriConsent';
@@ -9,9 +11,26 @@ import { appConfig } from './appConfig';
 import { GmailMailboxAdapter } from './gmailMailboxAdapter';
 import { keychainSecretStore } from './keychainSecretStore';
 import type { MailboxProvider } from './mailbox';
+import { OutlookMailboxAdapter } from './outlookMailboxAdapter';
 
 export async function createMailboxProvider(): Promise<MailboxProvider> {
   const cfg = await appConfig();
+
+  if (cfg.mailProvider === 'outlook') {
+    if (!cfg.outlookClientId) throw new Error('Add your Outlook Client ID in Settings (gear icon)');
+    const http = new TauriHttpClient();
+    const auth = createMicrosoftAuthenticator({
+      http,
+      secrets: keychainSecretStore,
+      clientId: cfg.outlookClientId,
+      tenant: cfg.outlookTenant,
+      redirectUri: cfg.outlookRedirectUri,
+      runConsent: createTauriConsentRunner(cfg.outlookRedirectUri),
+    });
+    const graph = new MicrosoftGraphProvider({ http, auth });
+    return new OutlookMailboxAdapter(() => graph);
+  }
+
   if (!cfg.googleClientId) throw new Error('Add your Google Client ID in Settings (gear icon)');
 
   const http = new TauriHttpClient();

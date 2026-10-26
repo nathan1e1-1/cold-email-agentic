@@ -236,7 +236,9 @@ export function Sidebar({
               <span className="account-email" title={identity}>
                 {identity}
               </span>
-              <span className="identity-sub">{account ? 'Gmail account' : 'Connect to get started'}</span>
+              <span className="identity-sub">
+                {account ? (account.provider === 'outlook' ? 'Microsoft 365' : 'Gmail') : 'Connect to get started'}
+              </span>
             </span>
           </div>
           <button

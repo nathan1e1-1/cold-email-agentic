@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { loadSettings, saveSettings, SECRET_KEYS, type StoredSettings } from '../services/appSettings'
+import { appConfig } from '../services/appConfig'
 import { setSecret } from '../services/secrets'
 import { applyTheme, loadTheme, saveTheme, type Theme } from '../services/theme'
 
-export function SettingsView({ onSaved, onReconnect }: { onSaved: () => void; onReconnect: () => void }) {
+export function SettingsView({ onSaved }: { onSaved: (force?: boolean) => void }) {
   const [settings, setSettings] = useState<StoredSettings>(loadSettings())
   const [theme, setTheme] = useState<Theme>(loadTheme)
   const [clientSecret, setClientSecret] = useState('')
@@ -13,7 +14,25 @@ export function SettingsView({ onSaved, onReconnect }: { onSaved: () => void; on
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
 
-  const save = async () => {
+  useEffect(() => {
+    let active = true
+    void appConfig().then((cfg) => {
+      if (!active) return
+      setSettings((prev) => ({
+        ...prev,
+        googleClientId: cfg.googleClientId,
+        redirectUri: cfg.redirectUri,
+        aiProvider: cfg.aiProvider,
+        mailProvider: cfg.mailProvider,
+        outlookClientId: cfg.outlookClientId,
+        outlookTenant: cfg.outlookTenant,
+        outlookRedirectUri: cfg.outlookRedirectUri,
+      }))
+    }).catch(() => {})
+    return () => { active = false }
+  }, [])
+
+  const save = async (force = false) => {
     setSaving(true)
     setError(null)
     setSaved(false)
@@ -24,7 +43,7 @@ export function SettingsView({ onSaved, onReconnect }: { onSaved: () => void; on
       if (groqKey) await setSecret(SECRET_KEYS.groqApiKey, groqKey)
       setClientSecret(''); setGeminiKey(''); setGroqKey('')
       setSaved(true)
-      onSaved()
+      onSaved(force)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -78,6 +97,32 @@ export function SettingsView({ onSaved, onReconnect }: { onSaved: () => void; on
       <div className="card settings-card">
         <div className="card-head">
           <div className="card-head-main">
+            <span className="card-title">Mail account</span>
+            <span className="card-sub">Which mailbox the app connects to</span>
+          </div>
+        </div>
+        <label className="field">
+          <span>Provider</span>
+          <select
+            value={settings.mailProvider}
+            onChange={(e) => setSettings({ ...settings, mailProvider: e.target.value === 'outlook' ? 'outlook' : 'gmail' })}
+          >
+            <option value="gmail">Gmail</option>
+            <option value="outlook">Outlook / Microsoft 365</option>
+          </select>
+        </label>
+        <div className="settings-actions">
+          <button type="button" className="btn btn-secondary" onClick={() => void save(true)}>Reconnect mail account</button>
+        </div>
+        <span className="hint">
+          Save reconnects; Reconnect forces a fresh sign-in. .env values are a first-run
+          fallback; settings saved here win.
+        </span>
+      </div>
+
+      <div className="card settings-card">
+        <div className="card-head">
+          <div className="card-head-main">
             <span className="card-title">Gmail</span>
             <span className="card-sub">OAuth credentials for sending and syncing</span>
           </div>
@@ -98,9 +143,27 @@ export function SettingsView({ onSaved, onReconnect }: { onSaved: () => void; on
           <span>OAuth redirect URI</span>
           <input value={settings.redirectUri} onChange={(e) => setSettings({ ...settings, redirectUri: e.target.value })} />
         </label>
-        <div className="settings-actions">
-          <button type="button" className="btn btn-secondary" onClick={onReconnect}>Reconnect Gmail</button>
+      </div>
+
+      <div className="card settings-card">
+        <div className="card-head">
+          <div className="card-head-main">
+            <span className="card-title">Outlook / Microsoft 365</span>
+            <span className="card-sub">Entra ID app (public client, no secret)</span>
+          </div>
         </div>
+        <label className="field">
+          <span>Application (client) ID</span>
+          <input value={settings.outlookClientId} onChange={(e) => setSettings({ ...settings, outlookClientId: e.target.value })} placeholder="00000000-0000-0000-0000-000000000000" />
+        </label>
+        <label className="field">
+          <span>Tenant <em>· common, organizations, or your tenant domain/ID</em></span>
+          <input value={settings.outlookTenant} onChange={(e) => setSettings({ ...settings, outlookTenant: e.target.value })} placeholder="contoso.onmicrosoft.com" />
+        </label>
+        <label className="field">
+          <span>Redirect URI <em>· must match the Entra registration</em></span>
+          <input value={settings.outlookRedirectUri} onChange={(e) => setSettings({ ...settings, outlookRedirectUri: e.target.value })} placeholder="http://localhost:8766" />
+        </label>
       </div>
 
       <div className="card settings-card">
@@ -151,7 +214,7 @@ export function SettingsView({ onSaved, onReconnect }: { onSaved: () => void; on
       {saved && !error && <div className="banner ok">Saved.</div>}
 
       <div className="view-actions">
-        <button type="button" className="send" disabled={saving} onClick={() => void save()}>
+        <button type="button" className="send" disabled={saving} onClick={() => void save(false)}>
           {saving ? 'Saving…' : 'Save'}
         </button>
       </div>

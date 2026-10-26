@@ -43,11 +43,11 @@ function loadCollapsed(): boolean {
 }
 
 const isPermissionError = (msg: string) => /40[13]|insufficient|permission/i.test(msg)
-const RECONNECT_HINT = 'Reconnect Gmail in Settings to enable deleting, then try again.'
+const RECONNECT_HINT = 'Reconnect your mail account in Settings to enable deleting, then try again.'
 
 async function persistThreads(r: Repository, acc: Account, list: Thread[]): Promise<void> {
   const accountRow = await r.upsertAccount({
-    provider: 'gmail', email: acc.email, ownEmail: acc.ownEmail, tokenRef: 'gmail', createdAt: Date.now(),
+    provider: acc.provider, email: acc.email, ownEmail: acc.ownEmail, tokenRef: acc.provider, createdAt: Date.now(),
   })
   // Full, unwindowed set: older leads must keep their cards.
   const recipients = new Set((await r.listColdRecipients()).map((c) => c.email))
@@ -156,16 +156,14 @@ function App() {
     box: MailboxProvider, r: Repository | null, pageToken?: string, includeSelf = testMode,
   ): Promise<ThreadPage> => {
     if (!r) return { threads: [], nextPageToken: null }
-    // Windowed set — used ONLY to build the Gmail query.
+    // Windowed set — used ONLY to build the outreach query.
+    const acc = await r.getAccount()
     let recipients = recentRecipientEmails(await r.listColdRecipients(), Date.now())
-    let known: string[]
-    if (includeSelf) {
-      known = await r.listColdThreadIds()
-    } else {
-      const acc = await r.getAccount()
-      recipients = excludeOwnEmail(recipients, acc?.ownEmail)
-      known = await r.listColdThreadIds(acc?.ownEmail)
-    }
+    if (!includeSelf) recipients = excludeOwnEmail(recipients, acc?.ownEmail)
+    // Outlook cold sends don't record Graph conversation IDs yet; Gmail thread ids would 404 on Graph.
+    const known = acc?.provider === 'outlook'
+      ? []
+      : await r.listColdThreadIds(includeSelf ? undefined : acc?.ownEmail)
     return box.listThreads({ pageToken, outreachRecipients: recipients, knownThreadIds: known })
   }, [testMode])
 
@@ -212,7 +210,7 @@ function App() {
     setError(null); setStatus(null); setThreads([]); setSelected(null); setSelectedId(null); setNextPageToken(null)
     setInboxOverflowed(false)
     setDraft(''); setInstruction('')
-    setBusy('Connecting to Gmail…')
+    setBusy('Connecting…')
     try {
       const box = await createMailboxProvider()
       const acc = await box.connect(force)
@@ -227,6 +225,10 @@ function App() {
       try {
         r = await getRepository()
         setRepo(r)
+        await r.upsertAccount({
+          provider: acc.provider, email: acc.email, ownEmail: acc.ownEmail,
+          tokenRef: acc.provider, createdAt: Date.now(),
+        })
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err))
       }
@@ -675,7 +677,7 @@ function App() {
                   </>
                 ) : (
                   <div className="empty">
-                    {busy ?? (account ? 'Select a conversation' : 'Connect Gmail to load your inbox.')}
+                    {busy ?? (account ? 'Select a conversation' : 'Connect a mail account to load your inbox.')}
                   </div>
                 )}
               </section>
@@ -683,7 +685,7 @@ function App() {
           )}
 
           {view === 'settings' && (
-            <SettingsView onSaved={() => { setSignature(loadSettings().signature); void connect() }} onReconnect={() => void connect(true)} />
+            <SettingsView onSaved={(force) => { setSignature(loadSettings().signature); void connect(force) }} />
           )}
         </div>
       </div>

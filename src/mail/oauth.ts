@@ -1,7 +1,39 @@
 import type { HttpClient } from './httpClient';
 
-const TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
-const AUTH_ENDPOINT = 'https://accounts.google.com/o/oauth2/v2/auth';
+export interface OAuthEndpoints {
+  authEndpoint: string;
+  tokenEndpoint: string;
+  extraAuthParams?: Record<string, string>;
+}
+
+export const GOOGLE_ENDPOINTS: OAuthEndpoints = {
+  authEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
+  tokenEndpoint: 'https://oauth2.googleapis.com/token',
+  extraAuthParams: { access_type: 'offline', prompt: 'consent' },
+};
+
+export const MICROSOFT_ENDPOINTS = (tenant = 'common'): OAuthEndpoints => {
+  if (!/^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*$/.test(tenant)) {
+    throw new Error('Invalid Microsoft tenant');
+  }
+  return {
+    authEndpoint: `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/authorize`,
+    tokenEndpoint: `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`,
+    extraAuthParams: { prompt: 'consent' },
+  };
+};
+
+export const OUTLOOK_SCOPES = [
+  'offline_access', 'User.Read', 'Mail.Read', 'Mail.Send', 'Mail.ReadWrite',
+];
+
+export interface OAuthStorageKeys { refresh: string; access: string; expiry: string }
+export const GOOGLE_STORAGE: OAuthStorageKeys = {
+  refresh: 'gmail.refresh_token', access: 'gmail.access_token', expiry: 'gmail.access_expires_at',
+};
+export const OUTLOOK_STORAGE: OAuthStorageKeys = {
+  refresh: 'outlook.refresh_token', access: 'outlook.access_token', expiry: 'outlook.access_expires_at',
+};
 
 export const DEFAULT_SCOPES = [
   'https://www.googleapis.com/auth/gmail.readonly',
@@ -9,10 +41,6 @@ export const DEFAULT_SCOPES = [
   'https://www.googleapis.com/auth/gmail.modify',
   'https://www.googleapis.com/auth/userinfo.email',
 ];
-
-const REFRESH_KEY = 'gmail.refresh_token';
-const ACCESS_KEY = 'gmail.access_token';
-const EXPIRY_KEY = 'gmail.access_expires_at';
 
 export interface SecretStore {
   get(key: string): Promise<string | null>;
@@ -31,6 +59,8 @@ export interface OAuthConfig {
   clientSecret?: string;
   redirectUri: string;
   scopes?: string[];
+  endpoints?: OAuthEndpoints;
+  storage?: OAuthStorageKeys;
 }
 
 export interface RefreshConfig {
@@ -71,18 +101,19 @@ export function buildAuthUrl(params: {
   redirectUri: string;
   challenge: string;
   scopes?: string[];
+  endpoints?: OAuthEndpoints;
 }): string {
+  const endpoints = params.endpoints ?? GOOGLE_ENDPOINTS;
   const query = new URLSearchParams({
+    ...(endpoints.extraAuthParams ?? {}),
     client_id: params.clientId,
     redirect_uri: params.redirectUri,
     response_type: 'code',
     scope: (params.scopes ?? DEFAULT_SCOPES).join(' '),
     code_challenge: params.challenge,
     code_challenge_method: 'S256',
-    access_type: 'offline',
-    prompt: 'consent',
   });
-  return `${AUTH_ENDPOINT}?${query.toString()}`;
+  return `${endpoints.authEndpoint}?${query.toString()}`;
 }
 
 interface TokenResponse {
@@ -125,7 +156,7 @@ export async function exchangeCode(
   }).toString();
   const res = await http.request({
     method: 'POST',
-    url: TOKEN_ENDPOINT,
+    url: params.endpoints?.tokenEndpoint ?? GOOGLE_ENDPOINTS.tokenEndpoint,
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body,
   });
@@ -133,7 +164,7 @@ export async function exchangeCode(
 }
 
 export async function refreshAccessToken(
-  params: { refreshToken: string } & RefreshConfig,
+  params: { refreshToken: string; tokenEndpoint?: string } & RefreshConfig,
   http: HttpClient,
   now = Date.now(),
 ): Promise<TokenSet> {
@@ -145,7 +176,7 @@ export async function refreshAccessToken(
   }).toString();
   const res = await http.request({
     method: 'POST',
-    url: TOKEN_ENDPOINT,
+    url: params.tokenEndpoint ?? GOOGLE_ENDPOINTS.tokenEndpoint,
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body,
   });
@@ -160,6 +191,7 @@ export class OAuthAuthenticator implements Authenticator {
   private config: OAuthConfig;
   private runConsent: ConsentRunner;
   private clock: () => number;
+  private storage: OAuthStorageKeys;
   private accessToken: string | null = null;
   private expiresAt = 0;
   private refreshToken: string | null | undefined;
@@ -176,6 +208,7 @@ export class OAuthAuthenticator implements Authenticator {
     this.config = deps.config;
     this.runConsent = deps.runConsent;
     this.clock = deps.now ?? Date.now;
+    this.storage = deps.config.storage ?? GOOGLE_STORAGE;
   }
 
   async auth(): Promise<void> {
@@ -185,6 +218,7 @@ export class OAuthAuthenticator implements Authenticator {
       redirectUri: this.config.redirectUri,
       challenge,
       scopes: this.config.scopes,
+      endpoints: this.config.endpoints,
     });
     const { code } = await this.runConsent(url);
     const tokens = await exchangeCode(
@@ -196,15 +230,15 @@ export class OAuthAuthenticator implements Authenticator {
     this.expiresAt = tokens.expiresAt;
     if (tokens.refreshToken) {
       this.refreshToken = tokens.refreshToken;
-      await this.secrets.set(REFRESH_KEY, tokens.refreshToken);
+      await this.secrets.set(this.storage.refresh, tokens.refreshToken);
     }
-    await this.secrets.set(ACCESS_KEY, tokens.accessToken);
-    await this.secrets.set(EXPIRY_KEY, String(tokens.expiresAt));
+    await this.secrets.set(this.storage.access, tokens.accessToken);
+    await this.secrets.set(this.storage.expiry, String(tokens.expiresAt));
   }
 
   private async loadRefreshToken(): Promise<string | null> {
     if (this.refreshToken === undefined) {
-      this.refreshToken = await this.secrets.get(REFRESH_KEY);
+      this.refreshToken = await this.secrets.get(this.storage.refresh);
     }
     return this.refreshToken;
   }
@@ -221,8 +255,8 @@ export class OAuthAuthenticator implements Authenticator {
     }
 
     if (!this.accessToken) {
-      const stored = await this.secrets.get(ACCESS_KEY);
-      const expiry = Number((await this.secrets.get(EXPIRY_KEY)) ?? '0');
+      const stored = await this.secrets.get(this.storage.access);
+      const expiry = Number((await this.secrets.get(this.storage.expiry)) ?? '0');
       if (stored && this.clock() < expiry - 60_000) {
         this.accessToken = stored;
         this.expiresAt = expiry;
@@ -233,14 +267,23 @@ export class OAuthAuthenticator implements Authenticator {
     const refresh = await this.loadRefreshToken();
     if (!refresh) throw new Error('Not authenticated');
     const tokens = await refreshAccessToken(
-      { refreshToken: refresh, clientId: this.config.clientId, clientSecret: this.config.clientSecret },
+      {
+        refreshToken: refresh,
+        clientId: this.config.clientId,
+        clientSecret: this.config.clientSecret,
+        tokenEndpoint: this.config.endpoints?.tokenEndpoint,
+      },
       this.http,
       this.clock(),
     );
+    if (tokens.refreshToken && tokens.refreshToken !== refresh) {
+      this.refreshToken = tokens.refreshToken;
+      await this.secrets.set(this.storage.refresh, tokens.refreshToken);
+    }
     this.accessToken = tokens.accessToken;
     this.expiresAt = tokens.expiresAt;
-    await this.secrets.set(ACCESS_KEY, tokens.accessToken);
-    await this.secrets.set(EXPIRY_KEY, String(tokens.expiresAt));
+    await this.secrets.set(this.storage.access, tokens.accessToken);
+    await this.secrets.set(this.storage.expiry, String(tokens.expiresAt));
     return tokens.accessToken;
   }
 
@@ -248,8 +291,8 @@ export class OAuthAuthenticator implements Authenticator {
     this.accessToken = null;
     this.expiresAt = 0;
     this.refreshToken = null;
-    await this.secrets.delete(REFRESH_KEY);
-    await this.secrets.delete(ACCESS_KEY);
-    await this.secrets.delete(EXPIRY_KEY);
+    await this.secrets.delete(this.storage.refresh);
+    await this.secrets.delete(this.storage.access);
+    await this.secrets.delete(this.storage.expiry);
   }
 }
